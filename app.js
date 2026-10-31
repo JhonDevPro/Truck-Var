@@ -378,7 +378,7 @@ function initThreeJS() {
 }
 
 function getGridMetrics(tr, cComp, cLarg, cQtd, isCarreta) {
-    const usesGates = isCarreta && inputs.tampas.value === 'com' && tr.tipo !== 'sider';
+    const usesGates = isCarreta && inputs.tampas.value === 'com' && tr.tipo !== 'sider' && tr.tipo !== 'carreta_bau';
     const availableWidth = usesGates ? tr.w_util : tr.w;
     
     let maxCols = Math.floor((availableWidth + GAP) / (cLarg + GAP));
@@ -418,7 +418,7 @@ function analyzeAndDraw() {
         aetMotivo = `A largura do bloco de carga (${grid.totalLarg.toFixed(2)}m) excede a largura do veículo (${tr.w.toFixed(2)}m). `;
         if(grid.totalLarg > 3.20) aetMotivo += `(Excede limite legal de 3.20m).`;
     } else if (isCarreta && grid.totalLarg > grid.availableWidth) {
-        const usesGates = inputs.tampas.value === 'com' && tr.tipo !== 'sider';
+        const usesGates = inputs.tampas.value === 'com' && tr.tipo !== 'sider' && tr.tipo !== 'carreta_bau';
         if(usesGates) {
             aetMotivo = `Atenção: O bloco de carga (${grid.totalLarg.toFixed(2)}m) excede a área útil entre as tampas (${grid.availableWidth.toFixed(2)}m). Mude para "Sem tampas laterais" ou reduza as fileiras. `;
             alertClass = "bg-amber-50 border-amber-200 text-amber-800";
@@ -664,7 +664,9 @@ function draw3D(tr, cComp, cLarg, cAlt, cQtd, grid, pos, isCarreta) {
     const rearEnd = isCarreta || tr.tipo === 'reta' ? rearStart : rearStart-bridgeL;
     
     const shiftZ = 1.5 * S; 
-    const usesChassisModel = ['carreta_ext', 'carreta', 'sider'].includes(tr.tipo);
+    
+    // Agora a Vanderleia E a Carreta Baú utilizam o chassi 3D
+    const usesChassisModel = ['carreta_ext', 'carreta', 'sider', 'carreta_bau', 'vanderleia'].includes(tr.tipo);
 
     function addChassisModel() {
         loadTrailerChassis().then(source => {
@@ -697,7 +699,16 @@ function draw3D(tr, cComp, cLarg, cAlt, cQtd, grid, pos, isCarreta) {
                 const materials = Array.isArray(node.material) ? node.material : [node.material];
                 const updatedMaterials = materials.map(original => {
                     const material = original.clone();
-                    const name = material.name.toLowerCase();
+                    const name = (material.name || '').toLowerCase();
+                    const nodeName = (node.name || '').toLowerCase();
+
+                    // Se for vanderleia, escondemos as rodas e componentes suspensos originais do modelo 3D
+                    // para podermos desenhar as rodas procedurais espaçadas
+                    if (tr.tipo === 'vanderleia' && (/tyre|tire|rubber|rim|hub/.test(name) || /wheel|roda|pneu|eixo/.test(nodeName))) {
+                        material.visible = false;
+                        node.visible = false;
+                        return material;
+                    }
 
                     if (/tyre|tire|rubber/.test(name)) {
                         material.color.setHex(0x151515);
@@ -706,6 +717,7 @@ function draw3D(tr, cComp, cLarg, cAlt, cQtd, grid, pos, isCarreta) {
                     } else if (/glass|signal|reflector|placa/.test(name)) {
                         return material;
                     } else {
+                        // Mantemos o chassi com a cor branca original de acordo com a sua preferência
                         material.color.setHex(0xf8fafc);
                         material.map = null;
                         if ('metalness' in material) material.metalness = 0.12;
@@ -734,23 +746,24 @@ function draw3D(tr, cComp, cLarg, cAlt, cQtd, grid, pos, isCarreta) {
             object.rotation.y = 0;
             object.position.set(0, 0, 3.5 * S);
 
+            // Cores originais mantidas de acordo com a sua última configuração
             const coresMateriais = {
-                aiStandardSurface2SG: 0x60656b, // Cinza (Cabine traseira)
-                aiStandardSurface3SG: 0xe2e8f0, // Prata / Cromados
-                aiStandardSurface4SG: 0x60656b, // Detalhes (Era azul) -> Cinza quase branco
-                blinn1SG: 0xe2e8f0,             // Detalhes (Era azul) -> Cinza quase branco
-                blinn2SG: 0xe2e8f0,             // Detalhes (Era azul escuro) -> Cinza quase branco
-                blinn3SG: 0xe2e8f0,             // Prata / Cromados
-                fenderplasticSG: 0x222222,      // Plástico (Era azulado) -> Cinza escuro neutro
-                glassSG: 0x5e8296,              // Vidros
-                initialShadingGroup: 0xe2e8f0,  // Prata / Cromados
-                lambert2SG: 0xe2e8f0,           // Prata / Cromados
-                lambert3SG: 0x111111,           // Pneus (Preto)
-                lowchromeSG: 0xe2e8f0,          // Prata / Cromados
-                numplatextSG: 0xffffff,         // Branco (Placa)
-                phong1SG: 0x60656b,             // Cinza (Frente do caminhão)
-                phong2SG: 0xe2e8f0,             // Prata / Cromados
-                phong3SG: 0xe2e8f0              // Prata / Cromados
+                aiStandardSurface2SG: 0x60656b,
+                aiStandardSurface3SG: 0xe2e8f0,
+                aiStandardSurface4SG: 0x60656b,
+                blinn1SG: 0xe2e8f0,
+                blinn2SG: 0xe2e8f0,
+                blinn3SG: 0xe2e8f0,
+                fenderplasticSG: 0x222222,
+                glassSG: 0x5e8296,
+                initialShadingGroup: 0xe2e8f0,
+                lambert2SG: 0xe2e8f0,
+                lambert3SG: 0x111111,
+                lowchromeSG: 0xe2e8f0,
+                numplatextSG: 0xffffff,
+                phong1SG: 0x60656b,
+                phong2SG: 0xe2e8f0,
+                phong3SG: 0xe2e8f0
             };
             
             const materiaisPrateados = new Set([
@@ -781,7 +794,7 @@ function draw3D(tr, cComp, cLarg, cAlt, cQtd, grid, pos, isCarreta) {
                     } else if (material.name === 'lambert3SG') { // Pneus
                         newMat.metalness = 0.0;
                         newMat.roughness = 0.9;
-                    } else { // Pintura azul
+                    } else { // Pintura principal
                         newMat.metalness = 0.3;
                         newMat.roughness = 0.4;
                     }
@@ -815,7 +828,6 @@ function draw3D(tr, cComp, cLarg, cAlt, cQtd, grid, pos, isCarreta) {
             );
             
             // --- CLAREAMENTO REAL DA LATARIA DOS CAVALINHOS GLB ---
-            // Clareia também os mapas de textura, que eram a causa dos modelos continuarem pretos.
             object.traverse(node => {
                 if (!node.isMesh) return;
 
@@ -836,23 +848,19 @@ function draw3D(tr, cComp, cLarg, cAlt, cQtd, grid, pos, isCarreta) {
                     const isDarkDetail = /glass|window|windshield|tire|tyre|rubber|wheel|pneu|vidro|grill|grille|lamp|headlight|tail.?light/.test(materialName);
 
                     if (!isDarkDetail) {
-                        // Clareia a textura original sem trocar sua paleta de cores.
                         if (material.map) {
                             material.map = brightenCabTexture(material.map);
                             material.color.lerp(new THREE.Color(0xffffff), 0.45);
 
-                            // Luz baseada na própria textura: áreas pretas continuam escuras.
                             material.emissive = new THREE.Color(0xffffff);
                             material.emissiveMap = material.map;
                             material.emissiveIntensity = 0.65;
                         } else {
-                            // Materiais sem textura: clareia diretamente a pintura.
                             material.color.lerp(new THREE.Color(0xffffff), 0.62);
                             material.emissive = new THREE.Color(0x303030);
                             material.emissiveIntensity = 0.55;
                         }
 
-                        // Aparência de pintura automotiva com reflexo controlado.
                         if ('roughness' in material) {
                             material.roughness = Math.min(
                                 material.roughness ?? 0.7,
@@ -866,7 +874,6 @@ function draw3D(tr, cComp, cLarg, cAlt, cQtd, grid, pos, isCarreta) {
                             );
                         }
                     } else {
-                        // Não clareia a textura nem a cor de pneus, vidros e iluminação.
                         if ('roughness' in material) {
                             material.roughness = Math.max(
                                 material.roughness ?? 0.65,
@@ -896,8 +903,30 @@ function draw3D(tr, cComp, cLarg, cAlt, cQtd, grid, pos, isCarreta) {
         box(wT,.24*S,mL,deckMat,0,deckY-.12*S,-mL/2 + shiftZ);
         box(wT*.94,.045*S,mL*.96,woodMat,0,deckY+.02*S,-mL/2 + shiftZ);
         const startAxleZ = rearStart + 1.2*S;
+        
         if (usesChassisModel) {
             addChassisModel();
+            
+            // AQUI OCORRE A TRANSFORMAÇÃO PARA VANDERLEIA COM CHASSI 3D
+            // Desenha as rodas procedurais espaçadas após esconder as originais
+            if (tr.tipo === 'vanderleia') {
+                const axleY = 0.49*S;
+                const rW = 0.48*S;
+                const axSpacing = 2.4*S; // Espaçamento maior obrigatório para Vanderleia
+                
+                for(let i=0; i<tr.eixos; i++){
+                    const z = startAxleZ + i*axSpacing;
+                    [-1,1].forEach(side=>{
+                        const x = side*(wT/2 - 0.35*S);
+                        wheel(x-side*.15*S, axleY, z, rW, .28*S, trailerGroup, side > 0);
+                        wheel(x+side*.15*S, axleY, z, rW, .28*S, trailerGroup, false);
+
+                        if (i === 0) {
+                            box(0.55*S, 0.4*S, 0.02*S, mudflapMat, x, axleY - 0.1*S, z - 0.55*S);
+                        }
+                    });
+                }
+            }
         } else {
             mesh(new THREE.CylinderGeometry(0.08*S, 0.08*S, 0.3*S, 16), steel, 0, deckY-0.25*S, -0.5*S + shiftZ);
 
@@ -911,6 +940,7 @@ function draw3D(tr, cComp, cLarg, cAlt, cQtd, grid, pos, isCarreta) {
             const axleY = 0.49*S;
             const rW = 0.48*S;
             const axSpacing = tr.tipo === 'vanderleia' ? 2.4*S : 1.2*S;
+            
             for(let i=0; i<tr.eixos; i++){
                 const z = startAxleZ + i*axSpacing;
                 [-1,1].forEach(side=>{
@@ -931,29 +961,23 @@ function draw3D(tr, cComp, cLarg, cAlt, cQtd, grid, pos, isCarreta) {
             const rearEndZ = rearStart;
             const bumperZ = rearEndZ - 0.1*S;
             
-            // Barra de fixação
             box(wT*0.9, 0.1*S, 0.05*S, frame, 0, bumperY + 0.1*S, bumperZ); 
-            // Para-choque listrado (Branco/Vermelho)
             drawStripedBumper(wT*0.9, 0.1*S, 0.05*S, 0, bumperY, bumperZ - 0.04*S, 8); 
             
-            // Suportes verticais
             box(0.05*S, 0.35*S, 0.05*S, frame, wT*0.3, bumperY + 0.2*S, bumperZ - 0.05*S); 
             box(0.05*S, 0.35*S, 0.05*S, frame, -wT*0.3, bumperY + 0.2*S, bumperZ - 0.05*S);
             
-            // Lanternas traseiras posicionadas para fora da carroceria.
             [-1, 1].forEach(side => {
                 const lightX = side * wT * 0.4;
                 box(0.28*S, 0.12*S, 0.04*S, bumperRed, lightX, deckY - 0.12*S, bumperZ - 0.04*S);
                 box(0.28*S, 0.07*S, 0.04*S, mat(0xf59e0b), lightX, deckY - 0.24*S, bumperZ - 0.04*S);
             });
 
-            // Suporte e placa central na traseira.
             const plateY = bumperY + 0.28*S;
             const plateZ = bumperZ - 0.06*S;
             box(0.62*S, 0.36*S, 0.04*S, frame, 0, plateY, plateZ);
             box(0.52*S, 0.26*S, 0.02*S, bumperWhite, 0, plateY, plateZ - 0.03*S);
             
-            // Protetor Lateral (Entre a sapata e o primeiro eixo)
             const startLateral = -1.5*S + shiftZ;
             const endLateral = startAxleZ - 1.2*S;
             const protL = Math.abs(endLateral - startLateral);
@@ -979,15 +1003,11 @@ function draw3D(tr, cComp, cLarg, cAlt, cQtd, grid, pos, isCarreta) {
         } else {
             const tampH = 0.80*S; const tampT = 0.03*S;
             
-            // Tampa Frontal (Corrugada - Cinza Metálico)
             box(wT, tampH*1.5, tampT, corrugatedMat, 0, deckY + (tampH*1.5)/2, shiftZ -tampT/2);
-            
-            // Tampa Traseira (Corrugada)
             box(wT, tampH, tampT, corrugatedMat, 0, deckY + tampH/2, -mL + shiftZ + tampT/2);
             
             if (inputs.tampas.value === 'com') {
                 [-1,1].forEach(side => {
-                    // Tampas Laterais (Corrugadas)
                     box(tampT, tampH, mL - 2*tampT, corrugatedMat, side*(wT/2 - tampT/2), deckY + tampH/2, -mL/2 + shiftZ);
                 });
             }
