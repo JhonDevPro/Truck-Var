@@ -29,3 +29,30 @@ body { font-family: 'Inter', sans-serif; background-color: #f8fafc; overflow-x: 
 
 .h-3d-view { height: 50vh; min-height: 400px; }
 .h-2d-view { height: 28vh; min-height: 200px; }
+
+@media (max-width: 640px) {
+    body.min-h-screen {
+        padding-left: max(0.5rem, env(safe-area-inset-left));
+        padding-right: max(0.5rem, env(safe-area-inset-right));
+        padding-top: max(0.5rem, env(safe-area-inset-top));
+        padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+    }
+
+    .h-3d-view {
+        height: 45svh;
+        min-height: 280px;
+        max-height: 460px;
+    }
+
+    .h-2d-view {
+        height: 25svh;
+        min-height: 170px;
+    }
+
+    body.min-h-screen select,
+    body.min-h-screen input:not([type="checkbox"]),
+    body.min-h-screen button {
+        min-height: 44px;
+        font-size: 16px;
+    }
+}

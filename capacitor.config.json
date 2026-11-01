@@ -1,0 +1,6 @@
+{
+  "appId": "br.com.felka.calculadoracargas",
+  "appName": "Truck Var",
+  "webDir": "dist",
+  "bundledWebRuntime": false
+}

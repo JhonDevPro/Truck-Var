@@ -1,0 +1,82 @@
+name: Publish PWA and build Android APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish-pwa:
+    name: Publish PWA to GitHub Pages
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install icon generator
+        run: python3 -m pip install Pillow
+      - name: Generate PWA icons
+        run: python3 .github/scripts/prepare-icons.py
+      - name: Prepare web app
+        run: npm run build:web
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  build-android:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Prepare web app
+        run: npm run build:web
+      - name: Install Capacitor
+        run: npm install --no-audit --no-fund
+      - name: Generate Android project
+        run: npx cap add android
+      - name: Install icon generator
+        run: python3 -m pip install Pillow
+      - name: Generate Android launcher icons
+        run: python3 .github/scripts/prepare-icons.py --android-dir android
+      - name: Sync app assets
+        run: npx cap sync android
+      - name: Build installable debug APK
+        run: |
+          cd android
+          ./gradlew assembleDebug
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargas-felka-android-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
