@@ -20,29 +20,30 @@ const CAB_MODELS = {
         url: './tractor_cab_burnout_3.glb',
         scale: 1.2, 
         rotationY: 0,
-        offsetY: 1 // Empurra o camião para cima (ajuste se ficar a flutuar)
+        offsetY: 1 
     },
     fortnite_semi_truck: { 
         format: 'gltf', 
         url: './fortnite_semi_truck.glb',
         scale: 1.2, 
-        rotationY: Math.PI, // Mantém virado para a frente
-        offsetY: 1 // Empurra o camião para cima
+        rotationY: Math.PI, 
+        offsetY: 1 
     },
     semi_truck_burnout_revenge: { 
         format: 'gltf', 
         url: './semi_truck_burnout_revenge.glb',
         scale: 1.0,
         rotationY: 0,
-        offsetY: 0 // Zero se já estiver a tocar no chão
+        offsetY: 0 
     }
 };
 
 const cabModelPromises = new Map();
 const cabTexturePaletteCache = new WeakMap();
-
-// Clareia texturas escuras dos cavalinhos sem apagar pixels pretos de pneus/vidros.
 const cabBrightTextureCache = new WeakMap();
+
+// --- ESTADO GLOBAL DA COMPOSIÇÃO DE CARGAS ---
+let composicaoCargas = [];
 
 function brightenCabTexture(texture) {
     if (!texture || !texture.image) return texture;
@@ -65,23 +66,11 @@ function brightenCabTexture(texture) {
 
         for (let i = 0; i < data.length; i += 4) {
             if (data[i + 3] < 10) continue;
-
-            const r = data[i];
-            const g = data[i + 1];
-            const b = data[i + 2];
+            const r = data[i], g = data[i + 1], b = data[i + 2];
             const luminance = r * 0.2126 + g * 0.7152 + b * 0.0722;
-
-            // Mantém pixels quase pretos para preservar contornos e detalhes.
             if (luminance < 9) continue;
-
-            // Levanta sombras e meios-tons, mantendo a tonalidade original.
-            const lift = value => Math.min(255, Math.round(
-                255 * Math.pow(value / 255, 0.62)
-            ));
-
-            data[i] = lift(r);
-            data[i + 1] = lift(g);
-            data[i + 2] = lift(b);
+            const lift = value => Math.min(255, Math.round(255 * Math.pow(value / 255, 0.62)));
+            data[i] = lift(r); data[i + 1] = lift(g); data[i + 2] = lift(b);
         }
 
         ctx.putImageData(pixels, 0, 0);
@@ -92,7 +81,6 @@ function brightenCabTexture(texture) {
         cabBrightTextureCache.set(texture, brightTexture);
         return brightTexture;
     } catch (error) {
-        console.warn('Não foi possível clarear uma textura do cavalinho:', error);
         return texture;
     }
 }
@@ -100,80 +88,28 @@ function brightenCabTexture(texture) {
 const CAB_REFERENCE_SIZE = [7.4757, 10.306, 25.3345];
 const CAB_REFERENCE_CENTER = [0, 5.1179, 11.6600];
 
-function recolorCabTexture(texture, preserveDarkBelow = 8) {
-    if (!texture?.image) return texture;
-    if (cabTexturePaletteCache.has(texture)) return cabTexturePaletteCache.get(texture);
-
-    const image = texture.image;
-    const canvas = document.createElement('canvas');
-    canvas.width = image.width;
-    canvas.height = image.height;
-    const context = canvas.getContext('2d', { willReadFrequently: true });
-    context.drawImage(image, 0, 0);
-
-    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-    const pixels = imageData.data;
-    for (let i = 0; i < pixels.length; i += 4) {
-        const red = pixels[i];
-        const green = pixels[i + 1];
-        const blue = pixels[i + 2];
-        const luminance = red * 0.2126 + green * 0.7152 + blue * 0.0722;
-        const highestChannel = Math.max(red, green, blue);
-
-        if (highestChannel < preserveDarkBelow) continue;
-
-        if (luminance >= 170) {
-            const shade = 0.82 + 0.18 * Math.min(1, luminance / 255);
-            pixels[i] = Math.round(192 * shade);
-            pixels[i + 1] = Math.round(192 * shade);
-            pixels[i + 2] = Math.round(192 * shade);
-        } else {
-            const shade = 0.82 + 0.18 * Math.min(1, luminance / 180);
-            pixels[i] = Math.round(13 * shade);
-            pixels[i + 1] = Math.round(75 * shade);
-            pixels[i + 2] = Math.round(112 * shade);
-        }
-    }
-    context.putImageData(imageData, 0, 0);
-
-    const recoloredTexture = new THREE.CanvasTexture(canvas);
-    recoloredTexture.wrapS = texture.wrapS;
-    recoloredTexture.wrapT = texture.wrapT;
-    recoloredTexture.repeat.copy(texture.repeat);
-    recoloredTexture.offset.copy(texture.offset);
-    recoloredTexture.center.copy(texture.center);
-    recoloredTexture.rotation = texture.rotation;
-    recoloredTexture.flipY = texture.flipY;
-    recoloredTexture.encoding = texture.encoding;
-    recoloredTexture.needsUpdate = true;
-    cabTexturePaletteCache.set(texture, recoloredTexture);
-    return recoloredTexture;
-}
-
 const LOAD_TYPES = [
     { value: 'caixa', label: 'Caixa / carga industrial', preset: [6, 2.8, 2.5, 15] },
     { value: 'bobina_lado_1', label: '1 bobina — face para o lado', preset: [3, 3, 3, 12] },
     { value: 'bobina_lado_2', label: '2 bobinas — faces para o lado', preset: [5, 3, 3, 24] },
     { value: 'bobina_frente_1', label: '1 bobina — face para frente', preset: [3, 3, 3, 12] },
     { value: 'bobina_frente_2', label: '2 bobinas — faces para frente', preset: [6, 3, 3, 24] },
-    { value: 'skid', label: 'Skid offshore com equipamento interno', preset: [6, 3, 3.8, 18] },
-    { value: 'container_mae', label: 'Coração de Mãe — fechado (4 × 4 × 4 m)', preset: [4, 4, 4, 12] },
-    { value: 'container_mae_aberto', label: 'Coração de Mãe — aberto (4 × 4 × 4 m)', preset: [4, 4, 4, 12] },
-    { value: 'container_20', label: 'Container de 20 pés', preset: [6.06, 2.44, 2.59, 4] },
-    { value: 'container_40', label: 'Container de 40 pés', preset: [12.19, 2.44, 2.59, 8] },
-    { value: 'container_10', label: 'Container de 10 pés', preset: [3.05, 2.44, 2.59, 2] },
-    { value: 'container_baby', label: 'Container baby (menor que 10 pés)', preset: [2.5, 2.2, 2.2, 1.5] },
-    { value: 'tanque', label: 'Tanque em grade — 10 pés', preset: [3.05, 2.44, 2.59, 3.5] },
-    { value: 'tubulacao', label: 'Tubulações / tubos', preset: [8, 2.4, 2, 8] },
-    { value: 'vaso', label: 'Vaso de pressão / separador', preset: [4, 2.8, 3.5, 10] },
-    { value: 'gerador', label: 'Gerador / unidade de potência', preset: [4.5, 2.6, 2.7, 8] },
-    { value: 'cesta', label: 'Cesta offshore / basket', preset: [4, 2.4, 2.5, 5] },
-    { value: 'estrutura', label: 'Estrutura metálica / peça naval', preset: [7, 3, 2.8, 9] }
+    { value: 'skid', label: 'Skid offshore', preset: [6, 3, 3.8, 18] },
+    { value: 'container_mae', label: 'Coração de Mãe (Fechado)', preset: [4, 4, 4, 12] },
+    { value: 'container_mae_aberto', label: 'Coração de Mãe (Aberto)', preset: [4, 4, 4, 12] },
+    { value: 'container_20', label: 'Container 20 pés', preset: [6.06, 2.44, 2.59, 4] },
+    { value: 'container_40', label: 'Container 40 pés', preset: [12.19, 2.44, 2.59, 8] },
+    { value: 'container_10', label: 'Container 10 pés', preset: [3.05, 2.44, 2.59, 2] },
+    { value: 'container_baby', label: 'Container baby', preset: [2.5, 2.2, 2.2, 1.5] },
+    { value: 'tanque', label: 'Tanque em grade', preset: [3.05, 2.44, 2.59, 3.5] },
+    { value: 'tubulacao', label: 'Tubulações', preset: [8, 2.4, 2, 8] },
+    { value: 'vaso', label: 'Vaso de pressão', preset: [4, 2.8, 3.5, 10] },
+    { value: 'gerador', label: 'Gerador', preset: [4.5, 2.6, 2.7, 8] },
+    { value: 'cesta', label: 'Cesta offshore', preset: [4, 2.4, 2.5, 5] },
+    { value: 'estrutura', label: 'Estrutura metálica', preset: [7, 3, 2.8, 9] }
 ];
 
-const CONTAINER_LOAD_TYPES = new Set([
-    'container_mae', 'container_20', 'container_40', 'container_10', 'container_baby'
-]);
+const CONTAINER_LOAD_TYPES = new Set(['container_mae', 'container_20', 'container_40', 'container_10', 'container_baby']);
 
 const inputs = {
     cavalinho: document.getElementById('input_cavalinho'),
@@ -183,7 +119,7 @@ const inputs = {
     cLarg: document.getElementById('input_carga_largura'),
     cAlt: document.getElementById('input_carga_altura'),
     cPeso: document.getElementById('input_carga_peso'),
-    cQtd: document.getElementById('input_carga_qtd'),
+    cQtd: document.getElementById('input_carga_qtd'), // Lendo a quantidade do HTML
     posicao: document.getElementById('input_posicao'),
     tampas: document.getElementById('input_tampas')
 };
@@ -213,7 +149,10 @@ const els = {
     resPesoTotal: document.getElementById('res_peso_total'),
     sideCanvas: document.getElementById('sideCanvas'),
     rearCanvas: document.getElementById('rearCanvas'),
-    btnReset: document.getElementById('btn_reset')
+    btnAdicionar: document.getElementById('btn_adicionar_carga'),
+    btnReset: document.getElementById('btn_reset'),
+    listaCargas: document.getElementById('lista_composicao'),
+    badgeQtd: document.getElementById('badge_qtd_cargas')
 };
 
 const ctxSide = els.sideCanvas.getContext('2d');
@@ -273,6 +212,74 @@ inputs.placa_carreta.addEventListener('change', () => {
     if(inputs.placa_carreta.value) inputs.placa_prancha.value = "";
     updateTrailerInfo();
 });
+
+// Calcula o espaço que o grid de um bloco de cargas vai ocupar (fileiras e colunas)
+function getGridMetrics(tr, cComp, cLarg, cQtd, isCarreta) {
+    const usesGates = isCarreta && inputs.tampas.value === 'com' && tr.tipo !== 'sider' && tr.tipo !== 'carreta_bau';
+    const availableWidth = usesGates ? tr.w_util : tr.w;
+    
+    let maxCols = Math.floor((availableWidth + GAP) / (cLarg + GAP));
+    if (maxCols < 1) maxCols = 1; 
+    
+    const rows = Math.ceil(cQtd / maxCols);
+    const totalComp = rows * cComp + Math.max(0, rows - 1) * GAP;
+    const maxItemsInRow = Math.min(cQtd, maxCols);
+    const totalLarg = maxItemsInRow * cLarg + Math.max(0, maxItemsInRow - 1) * GAP;
+
+    return { maxCols, rows, totalComp, totalLarg, availableWidth };
+}
+
+// Atualiza a lista visual no HTML
+function renderListaCargas() {
+    els.listaCargas.innerHTML = '';
+    els.badgeQtd.textContent = composicaoCargas.length;
+
+    if (composicaoCargas.length === 0) {
+        els.listaCargas.innerHTML = '<li class="text-[11px] text-slate-400 italic py-2 text-center border border-dashed border-slate-300 rounded">Nenhuma carga adicionada</li>';
+        return;
+    }
+
+    composicaoCargas.forEach((carga, index) => {
+        const li = document.createElement('li');
+        li.className = "flex justify-between items-center bg-white border border-indigo-100 p-2 rounded shadow-sm text-[11px]";
+        
+        const typeLabel = LOAD_TYPES.find(t => t.value === carga.type)?.label || 'Carga';
+        
+        li.innerHTML = `
+            <div class="flex flex-col">
+                <span class="font-bold text-slate-700">${carga.qtd}x ${typeLabel}</span>
+                <span class="text-slate-500">${carga.comp.toFixed(1)}m x ${carga.larg.toFixed(1)}m x ${carga.alt.toFixed(1)}m &bull; ${carga.peso}t/unid</span>
+            </div>
+            <button class="text-red-500 hover:text-red-700 p-1" onclick="removerCarga(${index})" title="Remover item">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+            </button>
+        `;
+        els.listaCargas.appendChild(li);
+    });
+}
+
+window.removerCarga = function(index) {
+    composicaoCargas.splice(index, 1);
+    renderListaCargas();
+    analyzeAndDraw();
+}
+
+els.btnAdicionar.addEventListener('click', () => {
+    const comp = parseFloat(inputs.cComp.value) || 0.1;
+    const larg = parseFloat(inputs.cLarg.value) || 0.1;
+    const alt = parseFloat(inputs.cAlt.value) || 0.1;
+    const peso = parseFloat(inputs.cPeso.value) || 0;
+    const qtd = parseInt(inputs.cQtd.value) || 1; // Quantidade de peças deste bloco
+    const type = document.getElementById('input_tipo_carga').value;
+    const armador = document.getElementById('input_armador').value;
+
+    // Guardamos a quantidade diretamente no objeto da carga
+    composicaoCargas.push({ comp, larg, alt, peso, type, armador, qtd });
+    
+    renderListaCargas();
+    analyzeAndDraw();
+});
+
 
 function updateTrailerInfo() {
     const placa = getActiveTrailerId();
@@ -377,50 +384,45 @@ function initThreeJS() {
     animate();
 }
 
-function getGridMetrics(tr, cComp, cLarg, cQtd, isCarreta) {
-    const usesGates = isCarreta && inputs.tampas.value === 'com' && tr.tipo !== 'sider' && tr.tipo !== 'carreta_bau';
-    const availableWidth = usesGates ? tr.w_util : tr.w;
-    
-    let maxCols = Math.floor((availableWidth + GAP) / (cLarg + GAP));
-    if (maxCols < 1) maxCols = 1; 
-    
-    const rows = Math.ceil(cQtd / maxCols);
-    const totalComp = rows * cComp + Math.max(0, rows - 1) * GAP;
-    const maxItemsInRow = Math.min(cQtd, maxCols);
-    const totalLarg = maxItemsInRow * cLarg + Math.max(0, maxItemsInRow - 1) * GAP;
-
-    return { maxCols, rows, totalComp, totalLarg, availableWidth };
-}
-
 function analyzeAndDraw() {
     const tr = currentTrailer;
-    const cComp = parseFloat(inputs.cComp.value) || 0.1;
-    const cLarg = parseFloat(inputs.cLarg.value) || 0.1;
-    const cAlt = parseFloat(inputs.cAlt.value) || 0.1;
-    const cPesoUnitario = parseFloat(inputs.cPeso.value) || 0;
-    let cQtd = parseInt(inputs.cQtd.value) || 1;
-    if (cQtd < 1) cQtd = 1;
-
-    const pesoTotal = cPesoUnitario * cQtd;
-
     const pos = inputs.posicao.value;
     const isCarreta = tr.tipo.includes('carreta') || tr.tipo === 'vanderleia' || tr.tipo === 'sider';
+    const usesGates = isCarreta && inputs.tampas.value === 'com' && tr.tipo !== 'sider' && tr.tipo !== 'carreta_bau';
+    const availableWidth = usesGates ? tr.w_util : tr.w;
+    let espacoDisponivel = pos === 'mesa' || isCarreta ? tr.mesa : tr.pescoco;
+    if (tr.tipo === 'reta') espacoDisponivel = tr.mesa; 
 
-    const grid = getGridMetrics(tr, cComp, cLarg, cQtd, isCarreta);
+    // Consolida dados da composição considerando GRIDS de quantidade
+    let pesoTotal = 0;
+    let totalLargMax = 0;
+    let maxAlt = 0;
+    let compTotalUsado = 0;
+
+    composicaoCargas.forEach((carga) => {
+        // Analisa quanto de espaço este bloco de X cargas ocupará na carreta
+        const grid = getGridMetrics(tr, carga.comp, carga.larg, carga.qtd, isCarreta);
+        
+        pesoTotal += (carga.peso * carga.qtd);
+        if (grid.totalLarg > totalLargMax) totalLargMax = grid.totalLarg;
+        if (carga.alt > maxAlt) maxAlt = carga.alt;
+        compTotalUsado += grid.totalComp + GAP; // Adiciona um GAP entre os blocos
+    });
+    
+    if(composicaoCargas.length > 0) compTotalUsado -= GAP; // Remove o GAP excedente no final
 
     let reqAET = false;
     let aetMotivo = "";
     let alertClass = "bg-green-50 border-green-200 text-green-800";
     let iconColor = "text-green-600";
     
-    if (grid.totalLarg > tr.w) { 
+    if (totalLargMax > tr.w) { 
         reqAET = true;
-        aetMotivo = `A largura do bloco de carga (${grid.totalLarg.toFixed(2)}m) excede a largura do veículo (${tr.w.toFixed(2)}m). `;
-        if(grid.totalLarg > 3.20) aetMotivo += `(Excede limite legal de 3.20m).`;
-    } else if (isCarreta && grid.totalLarg > grid.availableWidth) {
-        const usesGates = inputs.tampas.value === 'com' && tr.tipo !== 'sider' && tr.tipo !== 'carreta_bau';
+        aetMotivo = `Um ou mais blocos de carga (${totalLargMax.toFixed(2)}m) excedem a largura do veículo (${tr.w.toFixed(2)}m). `;
+        if(totalLargMax > 3.20) aetMotivo += `(Excede limite legal de 3.20m).`;
+    } else if (isCarreta && totalLargMax > availableWidth) {
         if(usesGates) {
-            aetMotivo = `Atenção: O bloco de carga (${grid.totalLarg.toFixed(2)}m) excede a área útil entre as tampas (${grid.availableWidth.toFixed(2)}m). Mude para "Sem tampas laterais" ou reduza as fileiras. `;
+            aetMotivo = `Atenção: Algum bloco de carga (${totalLargMax.toFixed(2)}m) excede a área útil entre as tampas (${availableWidth.toFixed(2)}m). Mude para "Sem tampas laterais". `;
             alertClass = "bg-amber-50 border-amber-200 text-amber-800";
             iconColor = "text-amber-600";
         }
@@ -429,7 +431,7 @@ function analyzeAndDraw() {
     if (pesoTotal > tr.cap) {
         reqAET = true; 
         aetMotivo += aetMotivo ? " E " : "ALERTA: ";
-        aetMotivo += `O peso total da carga (${pesoTotal.toFixed(2)}t) excede a capacidade do veículo (${tr.cap.toFixed(2)}t).`;
+        aetMotivo += `O peso total somado (${pesoTotal.toFixed(2)}t) excede a capacidade do veículo (${tr.cap.toFixed(2)}t).`;
     }
 
     const pH = 1.60; 
@@ -438,13 +440,13 @@ function analyzeAndDraw() {
         baseH = pH;
     }
     
-    const altTotal = baseH + cAlt; 
+    const altTotal = baseH + maxAlt; 
     els.resAltTotal.textContent = altTotal.toFixed(2);
     
     if (altTotal > 4.40) {
         reqAET = true;
         aetMotivo += aetMotivo ? " E a " : "A ";
-        aetMotivo += `altura total (${altTotal.toFixed(2)}m) excede 4.40m.`;
+        aetMotivo += `altura total máxima (${altTotal.toFixed(2)}m) excede 4.40m.`;
         els.avisoAlt.textContent = "Excesso de Altura!";
         els.avisoAlt.className = "text-[10px] mt-1 font-bold text-red-600";
     } else {
@@ -452,7 +454,12 @@ function analyzeAndDraw() {
         els.avisoAlt.className = "text-[10px] mt-1 font-semibold text-green-600";
     }
 
-    if (reqAET) {
+    if (composicaoCargas.length === 0) {
+        els.titleAet.textContent = "CARRETA VAZIA"; 
+        els.descAet.textContent = "Adicione itens na composição de carga.";
+        alertClass = "bg-slate-50 border-slate-200 text-slate-800";
+        iconColor = "text-slate-500";
+    } else if (reqAET) {
         alertClass = "bg-red-50 border-red-200 text-red-800"; iconColor = "text-red-600";
         els.titleAet.textContent = "AET OBRIGATÓRIA"; 
         els.descAet.textContent = aetMotivo;
@@ -461,12 +468,12 @@ function analyzeAndDraw() {
         els.descAet.textContent = aetMotivo;
     } else {
         els.titleAet.textContent = "CARGA NORMAL"; 
-        els.descAet.textContent = "Dimensões e fileiras dentro dos limites.";
+        els.descAet.textContent = "Dimensões e pesos totais dentro dos limites.";
     }
     els.alertAet.className = `rounded-md p-4 shadow-sm border transition-colors duration-300 ${alertClass}`;
     els.iconAet.className = `w-5 h-5 ${iconColor}`;
 
-    let excesso = (grid.totalLarg - tr.w) / 2;
+    let excesso = (totalLargMax - tr.w) / 2;
     if (excesso <= 0) {
         els.resExcLat.textContent = "0.00";
         document.getElementById('icon_excesso_lat').classList.replace('bg-red-100', 'bg-slate-100');
@@ -477,17 +484,14 @@ function analyzeAndDraw() {
         document.getElementById('icon_excesso_lat').classList.replace('text-slate-400', 'text-red-600');
     }
 
-    let espacoDisponivel = pos === 'mesa' || isCarreta ? tr.mesa : tr.pescoco;
-    if (tr.tipo === 'reta') espacoDisponivel = tr.mesa; 
-
-    let pctUso = (grid.totalComp / espacoDisponivel) * 100;
+    let pctUso = (compTotalUsado / espacoDisponivel) * 100;
     els.resCompTotal.textContent = `de ${espacoDisponivel.toFixed(2)}m (${isCarreta ? 'carroceria' : pos})`;
-    els.resCompUso.textContent = `${grid.totalComp.toFixed(2)}m usados`;
+    els.resCompUso.textContent = `${compTotalUsado.toFixed(2)}m usados`;
     
     if (pctUso > 100) {
         els.barComp.style.width = '100%'; els.barComp.className = "h-full bg-red-500 transition-all duration-500";
         els.resCompUso.className = "text-[10px] font-bold text-red-600";
-        els.resCompUso.textContent = `${grid.totalComp.toFixed(2)}m (EXCESSO TRAS.)`;
+        els.resCompUso.textContent = `${compTotalUsado.toFixed(2)}m (EXCESSO TRAS.)`;
     } else {
         els.barComp.style.width = `${pctUso}%`; els.barComp.className = "h-full bg-blue-500 transition-all duration-500";
         els.resCompUso.className = "text-[10px] font-bold text-blue-700";
@@ -505,12 +509,12 @@ function analyzeAndDraw() {
         els.resPesoUso.className = "text-[10px] font-bold text-emerald-700";
     }
 
-    draw3D(tr, cComp, cLarg, cAlt, cQtd, grid, pos, isCarreta);
-    draw2D(tr, cComp, cLarg, cAlt, cQtd, grid, pos, isCarreta);
+    draw3D(tr, pos, isCarreta);
+    draw2D(tr, pos, isCarreta);
 }
 
 // --- Desenho 3D ---
-function draw3D(tr, cComp, cLarg, cAlt, cQtd, grid, pos, isCarreta) {
+function draw3D(tr, pos, isCarreta) {
     const drawRevision = ++draw3DRevision;
     const clearGroup = (group) => {
         while (group.children.length) {
@@ -547,27 +551,26 @@ function draw3D(tr, cComp, cLarg, cAlt, cQtd, grid, pos, isCarreta) {
     const bumperWhite = mat(0xf8fafc);
     const mudflapMat = mat(0x111111);
     
-    // Textura procedural para as tampas (linhas horizontais simulando metal corrugado)
     const createCorrugatedTexture = () => {
         const canvas = document.createElement('canvas');
         canvas.width = 128;
         canvas.height = 128;
         const ctx = canvas.getContext('2d');
-        ctx.fillStyle = '#0f172a'; // Cor base da carroceria
+        ctx.fillStyle = '#0f172a';
         ctx.fillRect(0, 0, 128, 128);
-        ctx.fillStyle = '#1e293b'; // Linha clara (relevo)
+        ctx.fillStyle = '#1e293b';
         for(let i=0; i<128; i+=16) {
             ctx.fillRect(0, i, 128, 12);
         }
         const tex = new THREE.CanvasTexture(canvas);
         tex.wrapS = THREE.RepeatWrapping;
         tex.wrapT = THREE.RepeatWrapping;
-        tex.repeat.set(1, 4); // Repetir a textura para não ficar esticada
+        tex.repeat.set(1, 4);
         return tex;
     };
     
     const corrugatedMat = new THREE.MeshStandardMaterial({
-        color: 0x475569, // Cinza ardósia realista
+        color: 0x475569,
         roughness: 0.8,
         bumpMap: createCorrugatedTexture(),
         bumpScale: 0.03
@@ -665,7 +668,6 @@ function draw3D(tr, cComp, cLarg, cAlt, cQtd, grid, pos, isCarreta) {
     
     const shiftZ = 1.5 * S; 
     
-    // Agora a Vanderleia E a Carreta Baú utilizam o chassi 3D
     const usesChassisModel = ['carreta_ext', 'carreta', 'sider', 'carreta_bau', 'vanderleia'].includes(tr.tipo);
 
     function addChassisModel() {
@@ -702,8 +704,6 @@ function draw3D(tr, cComp, cLarg, cAlt, cQtd, grid, pos, isCarreta) {
                     const name = (material.name || '').toLowerCase();
                     const nodeName = (node.name || '').toLowerCase();
 
-                    // Se for vanderleia, escondemos as rodas e componentes suspensos originais do modelo 3D
-                    // para podermos desenhar as rodas procedurais espaçadas
                     if (tr.tipo === 'vanderleia' && (/tyre|tire|rubber|rim|hub/.test(name) || /wheel|roda|pneu|eixo/.test(nodeName))) {
                         material.visible = false;
                         node.visible = false;
@@ -717,7 +717,6 @@ function draw3D(tr, cComp, cLarg, cAlt, cQtd, grid, pos, isCarreta) {
                     } else if (/glass|signal|reflector|placa/.test(name)) {
                         return material;
                     } else {
-                        // Mantemos o chassi com a cor branca original de acordo com a sua preferência
                         material.color.setHex(0xf8fafc);
                         material.map = null;
                         if ('metalness' in material) material.metalness = 0.12;
@@ -746,7 +745,6 @@ function draw3D(tr, cComp, cLarg, cAlt, cQtd, grid, pos, isCarreta) {
             object.rotation.y = 0;
             object.position.set(0, 0, 3.5 * S);
 
-            // Cores originais mantidas de acordo com a sua última configuração
             const coresMateriais = {
                 aiStandardSurface2SG: 0x60656b,
                 aiStandardSurface3SG: 0xe2e8f0,
@@ -791,10 +789,10 @@ function draw3D(tr, cComp, cLarg, cAlt, cQtd, grid, pos, isCarreta) {
                         newMat.opacity = 0.6;
                         newMat.metalness = 0.8;
                         newMat.roughness = 0.1;
-                    } else if (material.name === 'lambert3SG') { // Pneus
+                    } else if (material.name === 'lambert3SG') {
                         newMat.metalness = 0.0;
                         newMat.roughness = 0.9;
-                    } else { // Pintura principal
+                    } else {
                         newMat.metalness = 0.3;
                         newMat.roughness = 0.4;
                     }
@@ -803,7 +801,6 @@ function draw3D(tr, cComp, cLarg, cAlt, cQtd, grid, pos, isCarreta) {
                 node.material = Array.isArray(node.material) ? updatedMaterials : updatedMaterials[0];
             });
         } else {
-            // --- CAVALINHOS GLTF/GLB ---
             const cabConfig = CAB_MODELS[cabModelId] || {};
             const baseRotY = cabConfig.rotationY !== undefined ? cabConfig.rotationY : 0;
             
@@ -819,15 +816,15 @@ function draw3D(tr, cComp, cLarg, cAlt, cQtd, grid, pos, isCarreta) {
             const scaleY = (CAB_REFERENCE_SIZE[1] / size.y) * customScale;
             const scaleZ = (CAB_REFERENCE_SIZE[2] / size.z) * customScale;
             const customOffsetY = cabConfig.offsetY || 0;
+            const customOffsetZ = cabConfig.offsetZ || 0;
             
             object.scale.set(scaleX, scaleY, scaleZ);
             object.position.set(
                 CAB_REFERENCE_CENTER[0] - center.x * scaleX,
                 CAB_REFERENCE_CENTER[1] - center.y * scaleY + customOffsetY, 
-                CAB_REFERENCE_CENTER[2] - center.z * scaleZ
+                CAB_REFERENCE_CENTER[2] - center.z * scaleZ + customOffsetZ
             );
             
-            // --- CLAREAMENTO REAL DA LATARIA DOS CAVALINHOS GLB ---
             object.traverse(node => {
                 if (!node.isMesh) return;
 
@@ -844,7 +841,6 @@ function draw3D(tr, cComp, cLarg, cAlt, cQtd, grid, pos, isCarreta) {
                     const material = original.clone();
                     const materialName = `${material.name || ''} ${node.name || ''}`.toLowerCase();
 
-                    // Componentes que devem continuar escuros.
                     const isDarkDetail = /glass|window|windshield|tire|tyre|rubber|wheel|pneu|vidro|grill|grille|lamp|headlight|tail.?light/.test(materialName);
 
                     if (!isDarkDetail) {
@@ -907,12 +903,10 @@ function draw3D(tr, cComp, cLarg, cAlt, cQtd, grid, pos, isCarreta) {
         if (usesChassisModel) {
             addChassisModel();
             
-            // AQUI OCORRE A TRANSFORMAÇÃO PARA VANDERLEIA COM CHASSI 3D
-            // Desenha as rodas procedurais espaçadas após esconder as originais
             if (tr.tipo === 'vanderleia') {
                 const axleY = 0.49*S;
                 const rW = 0.48*S;
-                const axSpacing = 2.4*S; // Espaçamento maior obrigatório para Vanderleia
+                const axSpacing = 2.4*S;
                 
                 for(let i=0; i<tr.eixos; i++){
                     const z = startAxleZ + i*axSpacing;
@@ -955,7 +949,6 @@ function draw3D(tr, cComp, cLarg, cAlt, cQtd, grid, pos, isCarreta) {
             }
         }
         
-        // Para-choque Traseiro e Protetores Laterais (Ciclistas)
         if (!usesChassisModel) {
             const bumperY = deckY - 0.5*S;
             const rearEndZ = rearStart;
@@ -1052,325 +1045,294 @@ function draw3D(tr, cComp, cLarg, cAlt, cQtd, grid, pos, isCarreta) {
         }
     }
 
-    const loadType = document.getElementById('input_tipo_carga')?.value || 'caixa';
-    const loadW = Math.max(.1, cLarg) * S;
-    const loadH = Math.max(.1, cAlt) * S;
-    const loadL = Math.max(.1, cComp) * S;
+    // --- RENDERIZAÇÃO DAS CARGAS COMPOSTAS ---
+    let currentZ = (pos === 'pescoco') ? -0.5*S + shiftZ : (isCarreta ? -0.5*S + shiftZ : -pL - (tr.tipo === 'reta' ? 0 : 1.0*S) - 0.5*S + shiftZ);
 
-    const baseItem = new THREE.Group();
-    
-    function cargoBox(w,h,d,material,x=0,y=0,z=0){
-        return mesh(new THREE.BoxGeometry(Math.max(.04,w),Math.max(.04,h),Math.max(.04,d)),material,x,y,z,baseItem);
-    }
-    function cylinderAlongZ(radius,length,material,x,y,z,segments=32){
-        const c=mesh(new THREE.CylinderGeometry(radius,radius,length,segments),material,x,y,z,baseItem);
-        c.rotation.x=Math.PI/2; return c;
-    }
-    function cylinderAlongX(radius,length,material,x,y,z,segments=32){
-        const c=mesh(new THREE.CylinderGeometry(radius,radius,length,segments),material,x,y,z,baseItem);
-        c.rotation.z=Math.PI/2; return c;
-    }
-    function cargoBeam(start,end,thickness,material){
-        const startPoint = new THREE.Vector3(...start);
-        const endPoint = new THREE.Vector3(...end);
-        const direction = endPoint.clone().sub(startPoint);
-        const beam = mesh(
-            new THREE.BoxGeometry(thickness,thickness,direction.length()),
-            material,
-            (startPoint.x + endPoint.x)/2,
-            (startPoint.y + endPoint.y)/2,
-            (startPoint.z + endPoint.z)/2,
-            baseItem
-        );
-        beam.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1), direction.normalize());
-        return beam;
-    }
-    function buildCage(frameMaterial, accentMaterial, withDiagonals=true){
-        const halfW = loadW/2;
-        const halfH = loadH/2;
-        const halfL = loadL/2;
-        const tube = Math.max(0.06*S, Math.min(loadW,loadH,loadL)*0.025);
-        const xs = [-halfW,halfW];
-        const ys = [-halfH,halfH];
-        const zs = [-halfL,halfL];
-
-        ys.forEach(y => xs.forEach(x => cargoBeam([x,y,-halfL],[x,y,halfL],tube,frameMaterial)));
-        ys.forEach(y => zs.forEach(z => cargoBeam([-halfW,y,z],[halfW,y,z],tube,frameMaterial)));
-        xs.forEach(x => zs.forEach(z => cargoBeam([x,-halfH,z],[x,halfH,z],tube,frameMaterial)));
-
-        if(withDiagonals){
-            xs.forEach(x => {
-                cargoBeam([x,-halfH,-halfL],[x,halfH,halfL],tube*0.72,frameMaterial);
-                cargoBeam([x,-halfH,halfL],[x,halfH,-halfL],tube*0.72,frameMaterial);
-            });
-            zs.forEach(z => {
-                cargoBeam([-halfW,-halfH,z],[halfW,halfH,z],tube*0.72,frameMaterial);
-                cargoBeam([-halfW,halfH,z],[halfW,-halfH,z],tube*0.72,frameMaterial);
-            });
-        }
-
-        xs.forEach(x => zs.forEach(z => {
-            cargoBox(tube*2.1,tube*2.1,tube*2.1,accentMaterial,x,halfH-tube,z);
-        }));
-    }
-    function drawCoil(axis,radius,length,x,y,z){
-        const coilMaterial = mat(0x9ca3af,0.32,0.78);
-        const coreMaterial = mat(0x273443,0.48,0.55);
-        const endPositions = axis === 'x'
-            ? [-1,1].map(side => [x + side*length/2,y,z])
-            : [-1,1].map(side => [x,y,z + side*length/2]);
-
-        if(axis === 'x'){
-            cylinderAlongX(radius,length,coilMaterial,x,y,z);
-            cylinderAlongX(radius*0.24,length*1.03,coreMaterial,x,y,z);
-        } else {
-            cylinderAlongZ(radius,length,coilMaterial,x,y,z);
-            cylinderAlongZ(radius*0.24,length*1.03,coreMaterial,x,y,z);
-        }
-
-        endPositions.forEach(position => {
-            const ring = mesh(new THREE.TorusGeometry(radius*0.9,Math.max(0.04*S,radius*0.055),10,32),coilMaterial,...position,baseItem);
-            if(axis === 'x') ring.rotation.y = Math.PI/2;
-            const hub = axis === 'x'
-                ? cylinderAlongX(radius*0.24,0.04*S,coreMaterial,...position)
-                : cylinderAlongZ(radius*0.24,0.04*S,coreMaterial,...position);
-            hub.castShadow = true;
-        });
-    }
-
-    const steelLight = mat(0xb0bdc8);
-    const navy = mat(0x34495e);
-    const orange = mat(0xe67e22);
-    const darkOrange = mat(0xd35400);
-    const cageSteel = mat(0x273443,0.42,0.68);
-    const cageOrange = mat(0xc87812,0.48,0.42);
-    const cageAccent = mat(0xb8cc3b,0.4,0.25);
-    const equipmentBeige = mat(0xc5a66a,0.62,0.18);
-    const equipmentSteel = mat(0x73808b,0.35,0.72);
-
-    if(loadType.startsWith('bobina_')){
-        const coilCount = loadType.endsWith('_2') ? 2 : 1;
-        const axis = loadType.includes('_lado_') ? 'x' : 'z';
-        const sectionLength = loadL / coilCount;
-        const radius = Math.max(0.12*S,Math.min(loadW,loadH,sectionLength*1.6)*0.43);
-        for(let i=0;i<coilCount;i++){
-            const centerZ = -loadL/2 + sectionLength*(i+0.5);
-            const coilLength = axis === 'x' ? loadW*0.78 : sectionLength*0.78;
-            drawCoil(axis,radius,coilLength,0,0,centerZ);
-        }
-        cargoBox(loadW*0.9,0.12*S,loadL*0.96,navy,0,-loadH/2-0.06*S,0);
-    } else if(CONTAINER_LOAD_TYPES.has(loadType)){
-        const armador = document.getElementById('input_armador').value;
-        let contColor = 0x176b87; 
-        let logoText = "";
-        let logoColor = "#000000";
+    composicaoCargas.forEach((carga, index) => {
+        const cW = Math.max(.1, carga.larg) * S;
+        const cH = Math.max(.1, carga.alt) * S;
+        const cL = Math.max(.1, carga.comp) * S;
         
-        if (armador === 'maersk') {
-            contColor = 0xe0e5e8;
-        } else if (armador === 'msc') {
-            contColor = 0xd6c37f;
-            logoColor = "#111111";
-        } else if (armador === 'hapag') {
-            contColor = 0xea580c; 
-            logoColor = "#001b3a";
-        } else if (armador === 'evergreen') {
-            contColor = 0x065f32;
-            logoColor = "#ffffff";
-        } else if (armador === 'cma') {
-            contColor = 0x0f2142;
-            logoColor = "#ffffff";
-        }
-
-        const contMat = mat(contColor);
-        const ribD = 0.035 * S; 
-        cargoBox(loadW - 2*ribD, loadH, loadL, contMat, 0, 0, 0); 
-        const ribs=Math.max(8,Math.min(64,Math.floor(loadL/.22)));
-        const ribMat = mat(contColor); 
+        // Puxamos a matemática do grid para agrupar cargas repetidas
+        const grid = getGridMetrics(tr, carga.comp, carga.larg, carga.qtd, isCarreta);
+        const loadY = (pos === 'pescoco' || tr.tipo === 'reta' ? pH : (isCarreta ? deckY : hT)) + cH/2;
+        const loadZ_start = currentZ;
         
-        for(let i=0;i<=ribs;i++){
-            const z=-loadL/2+i*loadL/ribs;
-            [-1,1].forEach(side=>cargoBox(ribD, loadH*.94, .035*S, ribMat, side*(loadW/2 - ribD/2), 0, z));
+        // O group base será montado apenas uma vez com o visual do tipo escolhido
+        const baseItem = new THREE.Group();
+        
+        function cargoBox(w,h,d,material,x=0,y=0,z=0){
+            return mesh(new THREE.BoxGeometry(Math.max(.04,w),Math.max(.04,h),Math.max(.04,d)),material,x,y,z,baseItem);
         }
-        cargoBox(loadW*.98,.08*S,loadL*.98,navy,0,loadH/2,0);
-        cargoBox(loadW*.98,.08*S,loadL*.98,navy,0,-loadH/2,0);
+        function cylinderAlongZ(radius,length,material,x,y,z,segments=32){
+            const c=mesh(new THREE.CylinderGeometry(radius,radius,length,segments),material,x,y,z,baseItem);
+            c.rotation.x=Math.PI/2; return c;
+        }
+        function cylinderAlongX(radius,length,material,x,y,z,segments=32){
+            const c=mesh(new THREE.CylinderGeometry(radius,radius,length,segments),material,x,y,z,baseItem);
+            c.rotation.z=Math.PI/2; return c;
+        }
+        function cargoBeam(start,end,thickness,material){
+            const startPoint = new THREE.Vector3(...start);
+            const endPoint = new THREE.Vector3(...end);
+            const direction = endPoint.clone().sub(startPoint);
+            const beam = mesh(
+                new THREE.BoxGeometry(thickness,thickness,direction.length()),
+                material,
+                (startPoint.x + endPoint.x)/2,
+                (startPoint.y + endPoint.y)/2,
+                (startPoint.z + endPoint.z)/2,
+                baseItem
+            );
+            beam.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1), direction.normalize());
+            return beam;
+        }
+        function buildCage(frameMaterial, accentMaterial, withDiagonals=true){
+            const halfW = cW/2;
+            const halfH = cH/2;
+            const halfL = cL/2;
+            const tube = Math.max(0.06*S, Math.min(cW,cH,cL)*0.025);
+            const xs = [-halfW,halfW];
+            const ys = [-halfH,halfH];
+            const zs = [-halfL,halfL];
 
-        if (armador !== 'generico') {
-            const canvas = document.createElement('canvas');
-            canvas.width = 1024;
-            canvas.height = 256;
-            const ctx = canvas.getContext('2d');
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ys.forEach(y => xs.forEach(x => cargoBeam([x,y,-halfL],[x,y,halfL],tube,frameMaterial)));
+            ys.forEach(y => zs.forEach(z => cargoBeam([-halfW,y,z],[halfW,y,z],tube,frameMaterial)));
+            xs.forEach(x => zs.forEach(z => cargoBeam([x,-halfH,z],[x,halfH,z],tube,frameMaterial)));
+
+            if(withDiagonals){
+                xs.forEach(x => {
+                    cargoBeam([x,-halfH,-halfL],[x,halfH,halfL],tube*0.72,frameMaterial);
+                    cargoBeam([x,-halfH,halfL],[x,halfH,-halfL],tube*0.72,frameMaterial);
+                });
+                zs.forEach(z => {
+                    cargoBeam([-halfW,-halfH,z],[halfW,halfH,z],tube*0.72,frameMaterial);
+                    cargoBeam([-halfW,halfH,z],[halfW,-halfH,z],tube*0.72,frameMaterial);
+                });
+            }
+
+            xs.forEach(x => zs.forEach(z => {
+                cargoBox(tube*2.1,tube*2.1,tube*2.1,accentMaterial,x,halfH-tube,z);
+            }));
+        }
+        function drawCoil(axis,radius,length,x,y,z){
+            const coilMaterial = mat(0x9ca3af,0.32,0.78);
+            const coreMaterial = mat(0x273443,0.48,0.55);
+            const endPositions = axis === 'x'
+                ? [-1,1].map(side => [x + side*length/2,y,z])
+                : [-1,1].map(side => [x,y,z + side*length/2]);
+
+            if(axis === 'x'){
+                cylinderAlongX(radius,length,coilMaterial,x,y,z);
+                cylinderAlongX(radius*0.24,length*1.03,coreMaterial,x,y,z);
+            } else {
+                cylinderAlongZ(radius,length,coilMaterial,x,y,z);
+                cylinderAlongZ(radius*0.24,length*1.03,coreMaterial,x,y,z);
+            }
+
+            endPositions.forEach(position => {
+                const ring = mesh(new THREE.TorusGeometry(radius*0.9,Math.max(0.04*S,radius*0.055),10,32),coilMaterial,...position,baseItem);
+                if(axis === 'x') ring.rotation.y = Math.PI/2;
+                const hub = axis === 'x'
+                    ? cylinderAlongX(radius*0.24,0.04*S,coreMaterial,...position)
+                    : cylinderAlongZ(radius*0.24,0.04*S,coreMaterial,...position);
+                hub.castShadow = true;
+            });
+        }
+
+        const steelLight = mat(0xb0bdc8);
+        const navy = mat(0x34495e);
+        const orange = mat(0xe67e22);
+        const darkOrange = mat(0xd35400);
+        const cageSteel = mat(0x273443,0.42,0.68);
+        const cageOrange = mat(0xc87812,0.48,0.42);
+        const cageAccent = mat(0xb8cc3b,0.4,0.25);
+        const equipmentBeige = mat(0xc5a66a,0.62,0.18);
+        const equipmentSteel = mat(0x73808b,0.35,0.72);
+
+        if(carga.type.startsWith('bobina_')){
+            const coilCount = carga.type.endsWith('_2') ? 2 : 1;
+            const axis = carga.type.includes('_lado_') ? 'x' : 'z';
+            const sectionLength = cL / coilCount;
+            const radius = Math.max(0.12*S,Math.min(cW,cH,sectionLength*1.6)*0.43);
+            for(let i=0;i<coilCount;i++){
+                const centerZ = -cL/2 + sectionLength*(i+0.5);
+                const coilLength = axis === 'x' ? cW*0.78 : sectionLength*0.78;
+                drawCoil(axis,radius,coilLength,0,0,centerZ);
+            }
+            cargoBox(cW*0.9,0.12*S,cL*0.96,navy,0,-cH/2-0.06*S,0);
+        } else if(CONTAINER_LOAD_TYPES.has(carga.type)){
+            let contColor = 0x176b87; 
+            let logoColor = "#000000";
             
-            ctx.fillStyle = logoColor;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
+            if (carga.armador === 'maersk') { contColor = 0xe0e5e8; } 
+            else if (carga.armador === 'msc') { contColor = 0xd6c37f; logoColor = "#111111"; } 
+            else if (carga.armador === 'hapag') { contColor = 0xea580c; logoColor = "#001b3a"; } 
+            else if (carga.armador === 'evergreen') { contColor = 0x065f32; logoColor = "#ffffff"; } 
+            else if (carga.armador === 'cma') { contColor = 0x0f2142; logoColor = "#ffffff"; }
+
+            const contMat = mat(contColor);
+            const ribD = 0.035 * S; 
+            cargoBox(cW - 2*ribD, cH, cL, contMat, 0, 0, 0); 
+            const ribs=Math.max(8,Math.min(64,Math.floor(cL/.22)));
+            const ribMat = mat(contColor); 
             
-            if (armador === 'maersk') {
-                ctx.font = 'bold 120px "Arial Black", sans-serif';
-                ctx.fillText('MAERSK', 512 + 100, 128);
-                ctx.fillStyle = '#4099d4';
-                ctx.fillRect(80, 40, 160, 160);
-                ctx.fillStyle = 'white';
-                ctx.beginPath();
-                const cx = 160, cy = 120, outer = 70, inner = 32, p = 7;
-                for(let i = 0; i < p * 2; i++) {
-                    const a = (i * Math.PI / p) - Math.PI/2;
-                    const r = (i % 2 === 0) ? outer : inner;
-                    ctx.lineTo(cx + r * Math.cos(a), cy + r * Math.sin(a));
+            for(let i=0;i<=ribs;i++){
+                const z=-cL/2+i*cL/ribs;
+                [-1,1].forEach(side=>cargoBox(ribD, cH*.94, .035*S, ribMat, side*(cW/2 - ribD/2), 0, z));
+            }
+            cargoBox(cW*.98,.08*S,cL*.98,navy,0,cH/2,0);
+            cargoBox(cW*.98,.08*S,cL*.98,navy,0,-cH/2,0);
+
+            if (carga.armador !== 'generico') {
+                const canvas = document.createElement('canvas');
+                canvas.width = 1024; canvas.height = 256;
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = logoColor;
+                ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                
+                if (carga.armador === 'maersk') {
+                    ctx.font = 'bold 120px "Arial Black", sans-serif';
+                    ctx.fillText('MAERSK', 512 + 100, 128);
+                    ctx.fillStyle = '#4099d4'; ctx.fillRect(80, 40, 160, 160);
+                    ctx.fillStyle = 'white'; ctx.beginPath();
+                    const cx = 160, cy = 120, outer = 70, inner = 32, p = 7;
+                    for(let i = 0; i < p * 2; i++) {
+                        const a = (i * Math.PI / p) - Math.PI/2;
+                        const r = (i % 2 === 0) ? outer : inner;
+                        ctx.lineTo(cx + r * Math.cos(a), cy + r * Math.sin(a));
+                    }
+                    ctx.closePath(); ctx.fill();
+                } else if (carga.armador === 'msc') {
+                    ctx.font = 'bold 180px "Impact", sans-serif'; ctx.fillText('msc', 512, 128);
+                } else if (carga.armador === 'hapag') {
+                    ctx.font = 'bold 120px "Arial", sans-serif'; ctx.fillText('Hapag-Lloyd', 512 + 100, 128);
+                    ctx.fillStyle = '#00539c'; ctx.fillRect(80, 50, 120, 156);
+                } else if (carga.armador === 'evergreen') {
+                    ctx.font = 'bold 120px "Arial Black", sans-serif'; ctx.fillText('EVERGREEN', 512, 128);
+                } else if (carga.armador === 'cma') {
+                    ctx.font = 'bold 120px "Arial Black", sans-serif'; ctx.fillText('CMA CGM', 512, 128);
                 }
-                ctx.closePath();
-                ctx.fill();
-            } else if (armador === 'msc') {
-                ctx.font = 'bold 180px "Impact", sans-serif';
-                ctx.fillText('msc', 512, 128);
-            } else if (armador === 'hapag') {
-                ctx.font = 'bold 120px "Arial", sans-serif';
-                ctx.fillText('Hapag-Lloyd', 512 + 100, 128);
-                ctx.fillStyle = '#00539c';
-                ctx.fillRect(80, 50, 120, 156);
-            } else if (armador === 'evergreen') {
-                ctx.font = 'bold 120px "Arial Black", sans-serif';
-                ctx.fillText('EVERGREEN', 512, 128);
-            } else if (armador === 'cma') {
-                ctx.font = 'bold 120px "Arial Black", sans-serif';
-                ctx.fillText('CMA CGM', 512, 128);
+
+                const tex = new THREE.CanvasTexture(canvas);
+                tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+                const logoMat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide });
+                
+                const logoW = cL * 0.8;
+                const logoH = logoW * (256/1024);
+                const planeGeom = new THREE.PlaneGeometry(logoW, logoH);
+                
+                const p1 = new THREE.Mesh(planeGeom, logoMat);
+                p1.position.set(cW/2 + 0.05, 0, 0); p1.rotation.y = Math.PI / 2; baseItem.add(p1);
+
+                const p2 = new THREE.Mesh(planeGeom, logoMat);
+                p2.position.set(-cW/2 - 0.05, 0, 0); p2.rotation.y = -Math.PI / 2; baseItem.add(p2);
             }
-
-            const tex = new THREE.CanvasTexture(canvas);
-            tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
-            const logoMat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide });
-            
-            const logoW = loadL * 0.8;
-            const logoH = logoW * (256/1024);
-            const planeGeom = new THREE.PlaneGeometry(logoW, logoH);
-            
-            const p1 = new THREE.Mesh(planeGeom, logoMat);
-            p1.position.set(loadW/2 + 0.05, 0, 0); 
-            p1.rotation.y = Math.PI / 2;
-            baseItem.add(p1);
-
-            const p2 = new THREE.Mesh(planeGeom, logoMat);
-            p2.position.set(-loadW/2 - 0.05, 0, 0);
-            p2.rotation.y = -Math.PI / 2;
-            baseItem.add(p2);
-        }
-    } else if(loadType==='tubulacao'){
-        const radius=Math.min(loadH*.22,loadW*.13,.35*S);
-        const rowsL=Math.max(1,Math.floor(loadH/(radius*2.1)));
-        const colsL=Math.max(1,Math.floor(loadW/(radius*2.1)));
-        let n=0;
-        for(let row=0;row<rowsL && n<28;row++){
-            for(let col=0;col<colsL && n<28;col++,n++){
-                const cx=(col-(Math.min(colsL,28)-1)/2)*radius*2.1;
-                const cy=-loadH/2+radius+(row*radius*2.1);
-                cylinderAlongZ(radius,loadL*.96, n%3===0?steelLight:mat(0x647585),cx,cy,0,20);
+        } else if(carga.type==='tubulacao'){
+            const radius=Math.min(cH*.22,cW*.13,.35*S);
+            const rowsL=Math.max(1,Math.floor(cH/(radius*2.1)));
+            const colsL=Math.max(1,Math.floor(cW/(radius*2.1)));
+            let n=0;
+            for(let row=0;row<rowsL && n<28;row++){
+                for(let col=0;col<colsL && n<28;col++,n++){
+                    const cx=(col-(Math.min(colsL,28)-1)/2)*radius*2.1;
+                    const cy=-cH/2+radius+(row*radius*2.1);
+                    cylinderAlongZ(radius,cL*.96, n%3===0?steelLight:mat(0x647585),cx,cy,0,20);
+                }
             }
+            cargoBox(cW*1.02,.12*S,cL*.98,navy,0,-cH/2-.08*S,0);
+        } else if(carga.type==='container_mae_aberto'){
+            buildCage(cageOrange,mat(0xf2a128),true);
+            cargoBox(cW*0.78,cH*0.54,cL*0.76,equipmentBeige,0,-cH*0.02,0);
+            cargoBox(cW*0.78,0.08*S,cL*0.76,mat(0xd6bd87),0,cH*0.27,0);
+        } else if(carga.type==='tanque'){
+            buildCage(cageSteel,cageAccent,true);
+            const tankRadius = Math.min(cW,cH)*0.34;
+            cylinderAlongZ(tankRadius,cL*0.72,equipmentSteel,0,-cH*0.02,0,40);
+            [-1,1].forEach(side => {
+                const end = mesh(new THREE.SphereGeometry(tankRadius,24,16),equipmentSteel,0,-cH*0.02,side*cL*0.36,baseItem);
+                end.scale.set(1,1,0.28);
+            });
+        } else if(carga.type==='skid'){
+            buildCage(cageSteel,cageAccent,true);
+            cargoBox(cW*0.68,cH*0.42,cL*0.62,equipmentBeige,0,-cH*0.02,0);
+            cargoBox(cW*0.72,0.12*S,cL*0.68,navy,0,-cH*0.34,0);
+            [-1,1].forEach(side => {
+                cargoBox(0.12*S,cH*0.28,cL*0.56,equipmentSteel,side*cW*0.31,0,0);
+            });
+        } else if(carga.type==='estrutura' || carga.type==='cesta'){
+            buildCage(carga.type==='cesta' ? equipmentSteel : cageSteel,cageAccent,true);
+        } else if(carga.type==='vaso'){
+            const vesselRadius = Math.min(cW,cH)*0.39;
+            const vesselLength = cL*0.78;
+            cylinderAlongZ(vesselRadius,vesselLength,equipmentSteel,0,0,0,40);
+            [-1,1].forEach(side => {
+                const head = mesh(new THREE.SphereGeometry(vesselRadius,28,20),equipmentSteel,0,0,side*vesselLength*0.46,baseItem);
+                head.scale.set(1,1,0.3);
+                cargoBox(cW*0.26,cH*0.18,0.25*S,navy,0,-vesselRadius*0.8,side*cL*0.2);
+            });
+            cargoBox(cW*0.84,0.12*S,cL*0.84,navy,0,-cH/2-0.06*S,0);
+        } else if(carga.type==='gerador'){
+            const baseY = -cH/2 + 0.08*S;
+            cargoBox(cW*0.9,0.16*S,cL*0.9,navy,0,baseY,0);
+            cargoBox(cW*0.82,cH*0.64,cL*0.76,equipmentSteel,0,cH*0.02,0);
+            cargoBox(cW*0.84,0.12*S,cL*0.78,frame,0,cH*0.34,0);
+            cargoBox(0.05*S,cH*0.38,cL*0.42,navy,cW*0.43,0,0);
+            for(let i=0;i<6;i++){
+                cargoBox(0.025*S,cH*0.42,0.035*S,steelLight,-cW*0.43+i*0.12*S,0,cL*0.2);
+            }
+            cargoBox(0.05*S,cH*0.2,cL*0.22,orange,cW*0.44,cH*0.1,0);
+        } else {
+            cargoBox(cW,cH,cL,orange, 0, 0, 0);
+            cargoBox(cW*1.01,.07*S,cL*1.01,darkOrange,0,cH/2,0);
+            cargoBox(cW*1.01,.07*S,cL*1.01,darkOrange,0,-cH/2,0);
         }
-        cargoBox(loadW*1.02,.12*S,loadL*.98,navy,0,-loadH/2-.08*S,0);
-    } else if(loadType==='container_mae_aberto'){
-        buildCage(cageOrange,mat(0xf2a128),true);
-        cargoBox(loadW*0.78,loadH*0.54,loadL*0.76,equipmentBeige,0,-loadH*0.02,0);
-        cargoBox(loadW*0.78,0.08*S,loadL*0.76,mat(0xd6bd87),0,loadH*0.27,0);
-    } else if(loadType==='tanque'){
-        buildCage(cageSteel,cageAccent,true);
-        const tankRadius = Math.min(loadW,loadH)*0.34;
-        cylinderAlongZ(tankRadius,loadL*0.72,equipmentSteel,0,-loadH*0.02,0,40);
-        [-1,1].forEach(side => {
-            const end = mesh(new THREE.SphereGeometry(tankRadius,24,16),equipmentSteel,0,-loadH*0.02,side*loadL*0.36,baseItem);
-            end.scale.set(1,1,0.28);
-        });
-    } else if(loadType==='skid'){
-        buildCage(cageSteel,cageAccent,true);
-        cargoBox(loadW*0.68,loadH*0.42,loadL*0.62,equipmentBeige,0,-loadH*0.02,0);
-        cargoBox(loadW*0.72,0.12*S,loadL*0.68,navy,0,-loadH*0.34,0);
-        [-1,1].forEach(side => {
-            cargoBox(0.12*S,loadH*0.28,loadL*0.56,equipmentSteel,side*loadW*0.31,0,0);
-        });
-    } else if(loadType==='estrutura' || loadType==='cesta'){
-        buildCage(loadType==='cesta' ? equipmentSteel : cageSteel,cageAccent,true);
-    } else if(loadType==='vaso'){
-        const vesselRadius = Math.min(loadW,loadH)*0.39;
-        const vesselLength = loadL*0.78;
-        cylinderAlongZ(vesselRadius,vesselLength,equipmentSteel,0,0,0,40);
-        [-1,1].forEach(side => {
-            const head = mesh(new THREE.SphereGeometry(vesselRadius,28,20),equipmentSteel,0,0,side*vesselLength*0.46,baseItem);
-            head.scale.set(1,1,0.3);
-            cargoBox(loadW*0.26,loadH*0.18,0.25*S,navy,0,-vesselRadius*0.8,side*loadL*0.2);
-        });
-        cargoBox(loadW*0.84,0.12*S,loadL*0.84,navy,0,-loadH/2-0.06*S,0);
-    } else if(loadType==='gerador'){
-        const baseY = -loadH/2 + 0.08*S;
-        cargoBox(loadW*0.9,0.16*S,loadL*0.9,navy,0,baseY,0);
-        cargoBox(loadW*0.82,loadH*0.64,loadL*0.76,equipmentSteel,0,loadH*0.02,0);
-        cargoBox(loadW*0.84,0.12*S,loadL*0.78,frame,0,loadH*0.34,0);
-        cargoBox(0.05*S,loadH*0.38,loadL*0.42,navy,loadW*0.43,0,0);
-        for(let i=0;i<6;i++){
-            cargoBox(0.025*S,loadH*0.42,0.035*S,steelLight,-loadW*0.43+i*0.12*S,0,loadL*0.2);
+        
+        // Clona a malha base do item a ser repetido no grid
+        for (let i = 0; i < carga.qtd; i++) {
+            const r = Math.floor(i / grid.maxCols);
+            const c = i % grid.maxCols;
+            
+            const rowItems = Math.min(grid.maxCols, carga.qtd - r * grid.maxCols);
+            const rowW = rowItems * cW + Math.max(0, rowItems - 1) * GAP * S;
+            
+            const itemX = -rowW / 2 + cW / 2 + c * (cW + GAP * S);
+            const itemZ = loadZ_start - cL / 2 - r * (cL + GAP * S);
+            
+            const inst = baseItem.clone();
+            inst.position.set(itemX, loadY, itemZ);
+            loadGroup.add(inst);
         }
-        cargoBox(0.05*S,loadH*0.2,loadL*0.22,orange,loadW*0.44,loadH*0.1,0);
-    } else {
-        cargoBox(loadW,loadH,loadL,orange, 0, 0, 0);
-        cargoBox(loadW*1.01,.07*S,loadL*1.01,darkOrange,0,loadH/2,0);
-        cargoBox(loadW*1.01,.07*S,loadL*1.01,darkOrange,0,-loadH/2,0);
-    }
-
-    let loadY, loadZ_start;
-    if (isCarreta) {
-        loadY = deckY + loadH/2;
-        loadZ_start = -0.5 * S + shiftZ;
-    } else {
-        loadY = (pos === 'pescoco' || tr.tipo === 'reta' ? pH : hT) + loadH/2;
-        const dropL = tr.tipo === 'reta' ? 0 : 1.0 * S;
-        loadZ_start = (pos === 'pescoco') ? -0.5*S + shiftZ : -pL - dropL - 0.5*S + shiftZ;
-    }
-
-    const { maxCols, rows } = grid;
-    
-    for (let i = 0; i < cQtd; i++) {
-        const r = Math.floor(i / maxCols);
-        const c = i % maxCols;
         
-        const rowItems = Math.min(maxCols, cQtd - r * maxCols);
-        const rowW = rowItems * loadW + Math.max(0, rowItems - 1) * GAP * S;
-        
-        const itemX = -rowW / 2 + loadW / 2 + c * (loadW + GAP * S);
-        const itemZ = loadZ_start - loadL / 2 - r * (loadL + GAP * S);
-        
-        const inst = baseItem.clone();
-        inst.position.set(itemX, loadY, itemZ);
-        loadGroup.add(inst);
-    }
+        // Atualiza a posição inicial Z para o PRÓXIMO bloco da composição da lista 
+        currentZ -= (grid.totalComp * S + (GAP * S));
+    });
     
-    const totalLen = Math.max(10, 4.5*S+(isCarreta?mL:(tr.tipo==='reta'?pL+mL:pL+1.0*S+mL+bridgeL))+grid.totalComp*S);
-    
-    // Adicionamos um compensador para puxar o foco da câmera em direção ao cavalo mecânico
+    // Ajusta a Câmera
+    const totalLen = Math.max(10, 4.5*S+(isCarreta?mL:(tr.tipo==='reta'?pL+mL:pL+1.0*S+mL+bridgeL)));
     const compensacaoFrente = 2.5 * S; 
     const centerZ = (isCarreta ? -mL/2 + shiftZ : -pL-mL/2 + shiftZ) + compensacaoFrente;
     
-    camera.position.set(totalLen*.45, Math.max(7*S,loadY+loadH*1.5), centerZ - totalLen*.3);
-    controls.target.set(0, Math.max(1.0*S,loadY*.5), centerZ);
-    
+    camera.position.set(totalLen*.45, Math.max(7*S, 7*S), centerZ - totalLen*.3);
+    controls.target.set(0, 1.0*S, centerZ);
     camera.near=.1; camera.far=totalLen*8;
     camera.updateProjectionMatrix();
     controls.update();
 }
 
-function draw2D(tr, cComp, cLarg, cAlt, cQtd, grid, pos, isCarreta) {
-    const loadType = document.getElementById('input_tipo_carga')?.value || 'caixa';
-    drawSide2D(ctxSide, els.sideCanvas, tr, cComp, cLarg, cAlt, cQtd, grid, pos, loadType, isCarreta);
-    drawRear2D(ctxRear, els.rearCanvas, tr, cComp, cLarg, cAlt, cQtd, grid, pos, loadType, isCarreta);
+function draw2D(tr, pos, isCarreta) {
+    drawSide2D(ctxSide, els.sideCanvas, tr, pos, isCarreta);
+    drawRear2D(ctxRear, els.rearCanvas, tr, pos, isCarreta);
 }
 
-function drawCargoRect(ctx, x, y, w, h, isContainer=false) {
-    if(isContainer) {
-        const armador = document.getElementById('input_armador').value;
+function drawCargoRect(ctx, x, y, w, h, carga) {
+    if(CONTAINER_LOAD_TYPES.has(carga.type)) {
         let color = 'rgba(23,107,135,0.7)'; 
-        if(armador === 'maersk') color = 'rgba(224,229,232,0.9)';
-        if(armador === 'msc') color = 'rgba(214,195,127,0.9)';
-        if(armador === 'hapag') color = 'rgba(234,88,12,0.9)';
-        if(armador === 'evergreen') color = 'rgba(6,95,50,0.8)';
-        if(armador === 'cma') color = 'rgba(15,33,66,0.8)';
-
+        if(carga.armador === 'maersk') color = 'rgba(224,229,232,0.9)';
+        if(carga.armador === 'msc') color = 'rgba(214,195,127,0.9)';
+        if(carga.armador === 'hapag') color = 'rgba(234,88,12,0.9)';
+        if(carga.armador === 'evergreen') color = 'rgba(6,95,50,0.8)';
+        if(carga.armador === 'cma') color = 'rgba(15,33,66,0.8)';
         ctx.fillStyle = color;
         ctx.strokeStyle = '#1e293b';
     } else {
@@ -1381,15 +1343,18 @@ function drawCargoRect(ctx, x, y, w, h, isContainer=false) {
     ctx.strokeRect(x,y,w,h);
 }
 
-function drawSide2D(ctx, canvas, tr, cComp, cLarg, cAlt, cQtd, grid, pos, loadType, isCarreta) {
+function drawSide2D(ctx, canvas, tr, pos, isCarreta) {
     const rect = canvas.parentElement.getBoundingClientRect();
     canvas.width = rect.width; canvas.height = rect.height;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     const cTractor = 4.5;
     const bridgeL = 3.5;
+    let maxCargaH = 0;
+    composicaoCargas.forEach(c => { if(c.alt > maxCargaH) maxCargaH = c.alt; });
+    
     const wTotal = cTractor + (isCarreta ? tr.mesa : tr.pescoco + (tr.tipo === 'reta' ? 0 : 1.0) + tr.mesa + bridgeL) + 2; 
-    const hTotal = Math.max(5.0, (tr.tipo === 'reta' || isCarreta ? 1.6 : Math.max(1.6, tr.h)) + cAlt + 2); 
+    const hTotal = Math.max(5.0, (tr.tipo === 'reta' || isCarreta ? 1.6 : Math.max(1.6, tr.h)) + maxCargaH + 2); 
 
     const scale = Math.min((canvas.width - 20) / wTotal, (canvas.height - 20) / hTotal);
     const groundY = canvas.height - 15;
@@ -1430,28 +1395,32 @@ function drawSide2D(ctx, canvas, tr, cComp, cLarg, cAlt, cQtd, grid, pos, loadTy
         }
     }
 
-    const cL = cComp * scale;
-    const cH = cAlt * scale;
-    let cX_start, cY;
-    
+    let cX_start;
     if(isCarreta) {
         cX_start = startX - 0.5*scale;
-        cY = groundY - pH - cH;
     } else if(pos === 'pescoco' || tr.tipo === 'reta') {
         cX_start = startX - 0.5*scale; 
-        cY = groundY - pH - cH;
     } else {
         cX_start = startX - pL - (1.0*scale) - 0.5*scale; 
-        cY = groundY - hT - cH;
     }
 
     if (tr.tipo === 'sider') ctx.globalAlpha = 0.5;
     
-    const isCont = CONTAINER_LOAD_TYPES.has(loadType);
-    for (let r = 0; r < grid.rows; r++) {
-        const itemX = cX_start - cL - r * (cComp + GAP) * scale;
-        drawCargoRect(ctx, itemX, cY, cL, cH, isCont);
-    }
+    let currentX = cX_start;
+    composicaoCargas.forEach(carga => {
+        const grid = getGridMetrics(tr, carga.comp, carga.larg, carga.qtd, isCarreta);
+        const cL = carga.comp * scale;
+        const cH = carga.alt * scale;
+        const cY = (pos === 'pescoco' || tr.tipo === 'reta' || isCarreta ? groundY - pH - cH : groundY - hT - cH);
+        
+        for (let r = 0; r < grid.rows; r++) {
+            const itemX = currentX - cL - r * (carga.comp + GAP) * scale;
+            drawCargoRect(ctx, itemX, cY, cL, cH, carga);
+        }
+        
+        currentX -= (grid.totalComp + GAP) * scale;
+    });
+
     ctx.globalAlpha = 1.0;
 
     const limitH = 4.40 * scale;
@@ -1460,13 +1429,23 @@ function drawSide2D(ctx, canvas, tr, cComp, cLarg, cAlt, cQtd, grid, pos, loadTy
     ctx.setLineDash([]);
 }
 
-function drawRear2D(ctx, canvas, tr, cComp, cLarg, cAlt, cQtd, grid, pos, loadType, isCarreta) {
+function drawRear2D(ctx, canvas, tr, pos, isCarreta) {
     const rect = canvas.parentElement.getBoundingClientRect();
     canvas.width = rect.width; canvas.height = rect.height;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    const wTotal = Math.max(tr.w, grid.totalLarg) + 2; 
-    const hTotal = Math.max(4.5, (tr.tipo === 'reta' || pos === 'pescoco' || isCarreta ? 1.6 : tr.h) + (tr.tipo==='sider'?2.8:cAlt) + 1);
+    let widestCarga = null;
+    let maxW = 0;
+    composicaoCargas.forEach(c => {
+        const grid = getGridMetrics(tr, c.comp, c.larg, c.qtd, isCarreta);
+        if(grid.totalLarg > maxW) {
+            maxW = grid.totalLarg;
+            widestCarga = c;
+        }
+    });
+
+    const wTotal = Math.max(tr.w, maxW) + 2; 
+    const hTotal = Math.max(4.5, (tr.tipo === 'reta' || pos === 'pescoco' || isCarreta ? 1.6 : tr.h) + (tr.tipo==='sider'?2.8: (widestCarga?.alt || 0)) + 1);
     const scale = Math.min((canvas.width - 20) / wTotal, (canvas.height - 20) / hTotal);
     const groundY = canvas.height - 15;
     const centerX = canvas.width / 2;
@@ -1480,27 +1459,30 @@ function drawRear2D(ctx, canvas, tr, cComp, cLarg, cAlt, cQtd, grid, pos, loadTy
     ctx.fillRect(centerX - tW/2 + 0.1*scale, groundY - 1.0*scale, 0.6*scale, 1.0*scale);
     ctx.fillRect(centerX + tW/2 - 0.7*scale, groundY - 1.0*scale, 0.6*scale, 1.0*scale);
 
-    const cW = cLarg * scale;
-    const cH = cAlt * scale;
-    const cY = groundY - tH - cH;
-    
-    const firstRowItems = Math.min(grid.maxCols, cQtd);
-    const rowW_Scale = firstRowItems * cW + Math.max(0, firstRowItems - 1) * GAP * scale;
-    const startX_row = centerX - rowW_Scale / 2;
+    if (widestCarga) {
+        const grid = getGridMetrics(tr, widestCarga.comp, widestCarga.larg, widestCarga.qtd, isCarreta);
+        const cW = widestCarga.larg * scale;
+        const cH = widestCarga.alt * scale;
+        const cY = groundY - tH - cH;
+        
+        const firstRowItems = Math.min(grid.maxCols, widestCarga.qtd);
+        const rowW_Scale = firstRowItems * cW + Math.max(0, firstRowItems - 1) * GAP * scale;
+        const startX_row = centerX - rowW_Scale / 2;
 
-    const isCont = CONTAINER_LOAD_TYPES.has(loadType);
-    for (let c = 0; c < firstRowItems; c++) {
-        const itemX = startX_row + c * (cW + GAP * scale);
-        drawCargoRect(ctx, itemX, cY, cW, cH, isCont);
-    }
+        for (let c = 0; c < firstRowItems; c++) {
+            const itemX = startX_row + c * (cW + GAP * scale);
+            drawCargoRect(ctx, itemX, cY, cW, cH, widestCarga);
+        }
 
-    const limitW = grid.availableWidth;
-    if (grid.totalLarg > limitW) {
-        const excW = limitW * scale;
-        ctx.fillStyle = '#ef4444'; ctx.font = 'bold 10px Arial';
-        ctx.beginPath(); ctx.moveTo(centerX - rowW_Scale/2, cY - 10); ctx.lineTo(centerX - excW/2, cY - 10); ctx.stroke();
-        ctx.fillText('Exc', centerX - rowW_Scale/2 + 2, cY - 15);
-        ctx.beginPath(); ctx.moveTo(centerX + excW/2, cY - 10); ctx.lineTo(centerX + rowW_Scale/2, cY - 10); ctx.stroke();
+        const limitW = isCarreta && inputs.tampas.value === 'com' && tr.tipo !== 'sider' && tr.tipo !== 'carreta_bau' ? tr.w_util : tr.w;
+        if (maxW > limitW) {
+            const excW = limitW * scale;
+            const cW_max = maxW * scale;
+            ctx.fillStyle = '#ef4444'; ctx.font = 'bold 10px Arial';
+            ctx.beginPath(); ctx.moveTo(centerX - cW_max/2, groundY - tH - 10); ctx.lineTo(centerX - excW/2, groundY - tH - 10); ctx.stroke();
+            ctx.fillText('Exc', centerX - cW_max/2 + 2, groundY - tH - 15);
+            ctx.beginPath(); ctx.moveTo(centerX + excW/2, groundY - tH - 10); ctx.lineTo(centerX + cW_max/2, groundY - tH - 10); ctx.stroke();
+        }
     }
 }
 
@@ -1538,31 +1520,18 @@ tipoCargaSelect.addEventListener('change', () => {
     if(loadType) {
         const preset = loadType.preset;
         [inputs.cComp, inputs.cLarg, inputs.cAlt, inputs.cPeso].forEach((el,i) => el.value = preset[i]);
-        inputs.cQtd.value = "1";
     }
-    analyzeAndDraw();
-});
-
-inputArmador.addEventListener('change', analyzeAndDraw);
-if(inputs.tampas) inputs.tampas.addEventListener('change', analyzeAndDraw);
-Object.values(inputs).forEach(el => {
-    if(el) el.addEventListener('input', analyzeAndDraw);
 });
 
 els.btnReset.addEventListener('click', () => {
-    const caixaPreset = LOAD_TYPES.find(type => type.value === 'caixa').preset;
-    [inputs.cComp, inputs.cLarg, inputs.cAlt, inputs.cPeso].forEach((el,i) => el.value = caixaPreset[i]);
-    inputs.cQtd.value = "1"; inputs.posicao.value = "mesa";
+    composicaoCargas = [];
+    renderListaCargas();
     inputs.placa_carreta.value = ""; inputs.placa_prancha.value = "prancha_reb_6_3";
-    if (tipoCargaSelect) {
-        tipoCargaSelect.value = "caixa";
-        divArmador.classList.add('hidden');
-        inputArmador.value = 'generico';
-    }
     updateTrailerInfo();
 });
 
 window.addEventListener('load', () => {
     initThreeJS();
     updateTrailerInfo();
+    renderListaCargas();
 });
