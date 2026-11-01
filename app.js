@@ -44,8 +44,8 @@ const CAB_MODELS = {
         alignToGround: true,
         offsetZ: -2.6, // <-- ADICIONE ESTA LINHA (teste valores positivos ou negativos para ajustar)
         bodyColor: 0xf2f2f0,
-        grayMeshNames: ['Object_56', 'Object_58', 'Object_83', 'Object_125'],
-        whiteMeshNames: ['Object_30', 'Object_133']
+        grayMeshNames: ['Object_56', 'Object_83', 'Object_125'],
+        whiteMeshNames: ['Object_30', 'Object_58']
     }
 };
 
