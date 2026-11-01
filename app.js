@@ -44,7 +44,8 @@ const CAB_MODELS = {
         alignToGround: true,
         offsetZ: -2.6, // <-- ADICIONE ESTA LINHA (teste valores positivos ou negativos para ajustar)
         bodyColor: 0xf2f2f0,
-        grayMeshNames: ['Object_56', 'Object_58', 'Object_83', 'Object_125']
+        grayMeshNames: ['Object_56', 'Object_58', 'Object_83', 'Object_125'],
+        whiteMeshNames: ['Object_30', 'Object_133']
     }
 };
 
@@ -1151,6 +1152,12 @@ function draw3D(tr, pos, isCarreta) {
                         material.color.setHex(0x747a80);
                         if ('metalness' in material) material.metalness = 0.55;
                         if ('roughness' in material) material.roughness = 0.42;
+                    } else if (Array.isArray(cabConfig.whiteMeshNames) && cabConfig.whiteMeshNames.includes(node.name)) {
+                        material.color.setHex(0xffffff);
+                        material.emissive = new THREE.Color(0xffffff);
+                        material.emissiveIntensity = 0.8;
+                        if ('metalness' in material) material.metalness = 0.05;
+                        if ('roughness' in material) material.roughness = 0.5;
                     } else if (!isDarkDetail) {
                         if (cabConfig.bodyColor !== undefined) {
                             if (material.map) material.map = grayCabTexture(material.map);
