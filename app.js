@@ -2,6 +2,7 @@
 const bdVeiculos = {
     "prancha_reb_6_3": { tipo: "rebaixada", w: 3.00, h: 1.10, pescoco: 3.50, mesa: 6.30, compTotal: 14.50, eixos: 3, cap: 45 },
     "prancha_reb_7_0": { tipo: "rebaixada", w: 3.00, h: 0.70, pescoco: 3.80, mesa: 7.00, compTotal: 16.70, eixos: 3, cap: 45 },
+    "prancha_reb_6_0": { tipo: "rebaixada", w: 3.20, h: 0.90, pescoco: 3.60, transicao: 1.40, mesa: 6.00, areaCargaTotal: 11.00, compTotal: 14.60, eixos: 3, cap: 45 },
     "prancha_reta_12_5": { tipo: "reta", w: 3.20, h: 1.20, pescoco: 3.60, mesa: 12.55, compTotal: 18.00, eixos: 3, cap: 40 },
     "prancha_semi_3_9": { tipo: "semi-rebaixada", w: 3.00, h: 0.80, pescoco: 3.65, mesa: 3.95, compTotal: 13.50, eixos: 3, cap: 35 },
     "prancha_reb_4_11_3": { tipo: "rebaixada", w: 3.00, h: 0.90, pescoco: 3.70, mesa: 11.30, compTotal: 19.00, eixos: 4, cap: 60 },
@@ -38,11 +39,12 @@ const CAB_MODELS = {
     },
     scania_s_730: {
         format: 'gltf',
-        url: './scania_S-730.glb',
+        url: './scania_S-730.glb.gz',
+        compression: 'gzip',
         uniformScale: 3.0,
         rotationY: 0,
         alignToGround: true,
-        offsetZ: -2.6, // <-- ADICIONE ESTA LINHA (teste valores positivos ou negativos para ajustar)
+        offsetZ: -2.6,
         bodyColor: 0xf2f2f0,
         grayMeshNames: ['Object_56', 'Object_83', 'Object_125'],
         whiteMeshNames: ['Object_30', 'Object_58']
@@ -149,10 +151,30 @@ const LOAD_TYPES = [
     { value: 'skid', label: 'Skid offshore', preset: [6, 3, 3.8, 18] },
     { value: 'container_mae', label: 'Coração de Mãe (Fechado)', preset: [4, 4, 4, 12] },
     { value: 'container_mae_aberto', label: 'Coração de Mãe (Aberto)', preset: [4, 4, 4, 12] },
-    { value: 'container_20', label: 'Container 20 pés', preset: [6.06, 2.44, 2.59, 4] },
-    { value: 'container_40', label: 'Container 40 pés', preset: [12.19, 2.44, 2.59, 8] },
-    { value: 'container_10', label: 'Container 10 pés', preset: [3.05, 2.44, 2.59, 2] },
-    { value: 'container_baby', label: 'Container baby', preset: [2.5, 2.2, 2.2, 1.5] },
+    { value: 'container_20', label: 'Open Top 20 pés (lona)', preset: [5.919, 2.340, 2.286, 4] },
+    { value: 'container_40', label: 'Open Top 40 pés (lona)', preset: [12.043, 2.338, 2.272, 8] },
+    { value: 'container_10', label: 'Open Top 10 pés (ref.)', preset: [3.05, 2.44, 2.59, 2] },
+    { value: 'container_baby', label: 'Open Top baby (ref.)', preset: [2.5, 2.2, 2.2, 1.5] },
+    { value: 'container_dry_20', label: 'Dry 20 pés', preset: [5.896, 2.350, 2.385, 4] },
+    { value: 'container_reefer_20', label: 'Reefer 20 pés', preset: [5.451, 2.290, 2.157, 4] },
+    { value: 'container_flat_rack_20', label: 'Flat Rack dobrável 20 pés', preset: [5.966, 2.418, 2.286, 4] },
+    { value: 'container_ventilated_20', label: 'Ventilado 20 pés (ref.)', preset: [5.896, 2.350, 2.385, 4] },
+    { value: 'container_bulk_20', label: 'Graneleiro 20 pés (ref.)', preset: [5.896, 2.350, 2.385, 4] },
+    { value: 'container_double_door_20', label: 'Dupla porta 20 pés (ref.)', preset: [5.896, 2.350, 2.385, 4] },
+    { value: 'container_side_open_20', label: 'Abertura lateral 20 pés (ref.)', preset: [5.896, 2.350, 2.385, 4] },
+    { value: 'container_tank_20', label: 'Tanque ISO 20 pés (ref.)', preset: [5.896, 2.350, 2.385, 4] },
+    { value: 'container_dry_40', label: 'Dry 40 pés', preset: [12.035, 2.350, 2.393, 8] },
+    { value: 'container_high_cube_40', label: 'High Cube 40 pés', preset: [12.035, 2.350, 2.697, 8] },
+    { value: 'container_reefer_high_cube_40', label: 'Reefer High Cube 40 pés', preset: [11.578, 2.280, 2.415, 8] },
+    { value: 'container_flat_rack_40', label: 'Flat Rack dobrável 40 pés', preset: [12.178, 2.369, 1.943, 8] },
+    { value: 'container_ventilated_40', label: 'Ventilado 40 pés (ref.)', preset: [12.035, 2.350, 2.393, 8] },
+    { value: 'container_hard_top_40', label: 'Hard Top 40 pés (ref.)', preset: [12.035, 2.350, 2.393, 8] },
+    { value: 'container_bulk_40', label: 'Graneleiro 40 pés (ref.)', preset: [12.035, 2.350, 2.393, 8] },
+    { value: 'container_double_door_40', label: 'Dupla porta 40 pés (ref.)', preset: [12.035, 2.350, 2.393, 8] },
+    { value: 'container_side_open_40', label: 'Abertura lateral 40 pés (ref.)', preset: [12.035, 2.350, 2.393, 8] },
+    { value: 'container_insulated_40', label: 'Isolado 40 pés (ref.)', preset: [12.035, 2.350, 2.393, 8] },
+    { value: 'container_pallet_wide_40', label: 'Pallet Wide 40 pés (ref.)', preset: [12.035, 2.440, 2.393, 8] },
+    { value: 'container_platform_40', label: 'Plataforma 40 pés (ref.)', preset: [12.035, 2.350, 2.393, 8] },
     { value: 'tanque', label: 'Tanque em grade', preset: [3.05, 2.44, 2.59, 3.5] },
     { value: 'tubulacao', label: 'Tubulações', preset: [8, 2.4, 2, 8] },
     { value: 'vaso', label: 'Vaso de pressão', preset: [4, 2.8, 3.5, 10] },
@@ -161,7 +183,32 @@ const LOAD_TYPES = [
     { value: 'estrutura', label: 'Estrutura metálica', preset: [7, 3, 2.8, 9] }
 ];
 
-const CONTAINER_LOAD_TYPES = new Set(['container_mae', 'container_20', 'container_40', 'container_10', 'container_baby']);
+const CONTAINER_LOAD_TYPES = new Set(LOAD_TYPES
+    .filter(({ value }) => value.startsWith('container_'))
+    .map(({ value }) => value));
+const OPEN_TOP_LOAD_TYPES = new Set([
+    'container_mae', 'container_mae_aberto', 'container_20', 'container_40',
+    'container_10', 'container_baby'
+]);
+const FLAT_RACK_LOAD_TYPES = new Set(['container_flat_rack_20', 'container_flat_rack_40']);
+const REEFER_LOAD_TYPES = new Set(['container_reefer_20', 'container_reefer_high_cube_40']);
+const FLAT_PLATFORM_LOAD_TYPES = new Set(['container_platform_40']);
+const SIDE_OPEN_LOAD_TYPES = new Set(['container_side_open_20', 'container_side_open_40']);
+const TANK_CONTAINER_LOAD_TYPES = new Set(['container_tank_20']);
+const UNBRANDED_CONTAINER_TYPES = new Set([
+    ...FLAT_RACK_LOAD_TYPES,
+    ...FLAT_PLATFORM_LOAD_TYPES,
+    ...TANK_CONTAINER_LOAD_TYPES
+]);
+const LOCKED_LOAD_TYPES = new Set([...CONTAINER_LOAD_TYPES, 'caixa_metalica', 'cesta_metalica', 'cesta']);
+
+function getLoadStartClearance(type) {
+    return LOCKED_LOAD_TYPES.has(type) ? 1.4 : 0.2;
+}
+
+function getDeckTransitionLength(tr) {
+    return tr.tipo === 'reta' ? 0 : (tr.transicao ?? 1.2);
+}
 
 const inputs = {
     cavalinho: document.getElementById('input_cavalinho'),
@@ -182,6 +229,8 @@ const infos = {
     lbl_pescoco: document.getElementById('lbl_pescoco'),
     pescoco: document.getElementById('info_pescoco'),
     mesa: document.getElementById('info_mesa'),
+    areaCargaTotal: document.getElementById('info_area_carga'),
+    compTotal: document.getElementById('info_comp_total'),
     tagTipo: document.getElementById('tag_tipo_prancha')
 };
 
@@ -233,7 +282,29 @@ function loadCabModel(modelId) {
                 }, undefined, reject);
             })
             : new Promise((resolve, reject) => {
-                new THREE.GLTFLoader().load(model.url, gltf => resolve(gltf.scene), undefined, reject);
+                const loader = new THREE.GLTFLoader();
+                if (model.compression === 'gzip') {
+                    if (window.location.protocol === 'file:') {
+                        loader.load('./scania_S-730.glb', gltf => resolve(gltf.scene), undefined, reject);
+                        return;
+                    }
+                    fetch(model.url)
+                        .then(response => {
+                            if (!response.ok) {
+                                throw new Error(`Falha ao baixar o modelo (${response.status}).`);
+                            }
+                            if (typeof DecompressionStream !== 'function' || !response.body) {
+                                throw new Error('Este dispositivo não oferece suporte à descompressão do modelo Scania.');
+                            }
+                            return new Response(
+                                response.body.pipeThrough(new DecompressionStream('gzip'))
+                            ).arrayBuffer();
+                        })
+                        .then(data => loader.parse(data, './', gltf => resolve(gltf.scene), reject))
+                        .catch(reject);
+                    return;
+                }
+                loader.load(model.url, gltf => resolve(gltf.scene), undefined, reject);
             });
         cabModelPromises.set(modelId, promise);
     }
@@ -250,6 +321,40 @@ function loadTrailerChassis() {
     return trailerChassisPromise;
 }
 
+function frameVehicleView() {
+    const bounds = new THREE.Box3().setFromObject(trailerGroup);
+    if (loadGroup.children.length) bounds.union(new THREE.Box3().setFromObject(loadGroup));
+    if (bounds.isEmpty()) return;
+
+    const center = bounds.getCenter(new THREE.Vector3());
+    const direction = camera.position.clone().sub(controls.target).normalize();
+    const forward = direction.clone().negate();
+    const right = forward.clone().cross(camera.up).normalize();
+    const vertical = right.clone().cross(forward).normalize();
+    const tanHalfVerticalFov = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+    const tanHalfHorizontalFov = tanHalfVerticalFov * camera.aspect;
+    let distance = 0;
+
+    for (const x of [bounds.min.x, bounds.max.x]) {
+        for (const y of [bounds.min.y, bounds.max.y]) {
+            for (const z of [bounds.min.z, bounds.max.z]) {
+                const offset = new THREE.Vector3(x, y, z).sub(center);
+                const depth = offset.dot(direction);
+                distance = Math.max(
+                    distance,
+                    depth + Math.abs(offset.dot(right)) / tanHalfHorizontalFov,
+                    depth + Math.abs(offset.dot(vertical)) / tanHalfVerticalFov
+                );
+            }
+        }
+    }
+
+    controls.target.copy(center);
+    camera.position.copy(center).addScaledVector(direction, Math.max(distance * 1.15, 24));
+    camera.updateProjectionMatrix();
+    controls.update();
+}
+
 function getActiveTrailerId() {
     if (inputs.placa_prancha.value) return inputs.placa_prancha.value;
     if (inputs.placa_carreta.value) return inputs.placa_carreta.value;
@@ -257,6 +362,7 @@ function getActiveTrailerId() {
 }
 
 inputs.cavalinho.addEventListener('change', analyzeAndDraw);
+inputs.posicao.addEventListener('change', analyzeAndDraw);
 inputs.placa_prancha.addEventListener('change', () => {
     if(inputs.placa_prancha.value) inputs.placa_carreta.value = "";
     updateTrailerInfo();
@@ -280,6 +386,48 @@ function getGridMetrics(tr, cComp, cLarg, cQtd, isCarreta) {
     const totalLarg = maxItemsInRow * cLarg + Math.max(0, maxItemsInRow - 1) * GAP;
 
     return { maxCols, rows, totalComp, totalLarg, availableWidth };
+}
+
+function getLoadSequenceMetrics(tr, isCarreta) {
+    let mesaOffset = 0;
+    let pescocoOffset = 0;
+    const pos = inputs.posicao.value;
+    const loads = composicaoCargas.map(carga => {
+        const splitCoils = !isCarreta && tr.pescoco > 0 &&
+            (carga.type === 'bobina_lado_2' || carga.type === 'bobina_frente_2');
+        const clearance = getLoadStartClearance(carga.type);
+        const coilLength = splitCoils ? carga.comp / 2 : carga.comp;
+        const grid = getGridMetrics(tr, coilLength, carga.larg, carga.qtd, isCarreta);
+
+        if (splitCoils) {
+            const mesaStartOffset = Math.max(mesaOffset, clearance);
+            const pescocoStartOffset = Math.max(pescocoOffset, clearance);
+            mesaOffset = mesaStartOffset + grid.totalComp + GAP;
+            pescocoOffset = pescocoStartOffset + grid.totalComp + GAP;
+            return {
+                carga,
+                grid,
+                startOffset: pos === 'pescoco' ? pescocoStartOffset : mesaStartOffset,
+                mesaStartOffset,
+                pescocoStartOffset,
+                splitCoils,
+                coilLength
+            };
+        }
+
+        const inPescoco = !isCarreta && pos === 'pescoco';
+        const startOffset = Math.max(inPescoco ? pescocoOffset : mesaOffset, clearance);
+        if (inPescoco) pescocoOffset = startOffset + grid.totalComp + GAP;
+        else mesaOffset = startOffset + grid.totalComp + GAP;
+        return { carga, grid, startOffset, splitCoils, coilLength };
+    });
+
+    return {
+        loads,
+        totalComp: pos === 'pescoco' && !isCarreta ? pescocoOffset - (pescocoOffset ? GAP : 0) : mesaOffset - (mesaOffset ? GAP : 0),
+        mesaComp: mesaOffset ? mesaOffset - GAP : 0,
+        pescocoComp: pescocoOffset ? pescocoOffset - GAP : 0
+    };
 }
 
 // Atualiza a lista visual no HTML
@@ -395,6 +543,12 @@ function updateTrailerInfo() {
         infos.largura.value = currentTrailer.w.toFixed(2);
         infos.altura.value = currentTrailer.h.toFixed(2);
         infos.mesa.value = currentTrailer.mesa.toFixed(2);
+        infos.areaCargaTotal.value = currentTrailer.areaCargaTotal === undefined
+            ? "-"
+            : currentTrailer.areaCargaTotal.toFixed(2);
+        infos.compTotal.value = currentTrailer.compTotal === undefined
+            ? "-"
+            : currentTrailer.compTotal.toFixed(2);
         
         const isCarreta = currentTrailer.tipo.includes('carreta') || currentTrailer.tipo === 'vanderleia' || currentTrailer.tipo === 'sider';
         if (isCarreta) {
@@ -504,19 +658,15 @@ function analyzeAndDraw() {
     let pesoTotal = 0;
     let totalLargMax = 0;
     let maxAlt = 0;
-    let compTotalUsado = 0;
+    const loadSequence = getLoadSequenceMetrics(tr, isCarreta);
+    const compTotalUsado = loadSequence.totalComp;
 
-    composicaoCargas.forEach((carga) => {
-        // Analisa quanto de espaço este bloco de X cargas ocupará na carreta
-        const grid = getGridMetrics(tr, carga.comp, carga.larg, carga.qtd, isCarreta);
+    loadSequence.loads.forEach(({ carga, grid }) => {
         
         pesoTotal += (carga.peso * carga.qtd);
         if (grid.totalLarg > totalLargMax) totalLargMax = grid.totalLarg;
         if (carga.alt > maxAlt) maxAlt = carga.alt;
-        compTotalUsado += grid.totalComp + GAP; // Adiciona um GAP entre os blocos
     });
-    
-    if(composicaoCargas.length > 0) compTotalUsado -= GAP; // Remove o GAP excedente no final
 
     let reqAET = false;
     let aetMotivo = "";
@@ -539,6 +689,22 @@ function analyzeAndDraw() {
         reqAET = true; 
         aetMotivo += aetMotivo ? " E " : "ALERTA: ";
         aetMotivo += `O peso total somado (${pesoTotal.toFixed(2)}t) excede a capacidade do veículo (${tr.cap.toFixed(2)}t).`;
+    }
+
+    const areaExcedida = [];
+    if (!isCarreta && loadSequence.pescocoComp > tr.pescoco) {
+        areaExcedida.push(`pescoço (${loadSequence.pescocoComp.toFixed(2)}m usados de ${tr.pescoco.toFixed(2)}m)`);
+    }
+    if (loadSequence.mesaComp > tr.mesa) {
+        areaExcedida.push(`mesa/berço (${loadSequence.mesaComp.toFixed(2)}m usados de ${tr.mesa.toFixed(2)}m)`);
+    }
+    if (areaExcedida.length) {
+        aetMotivo += aetMotivo ? " " : "";
+        aetMotivo += `Atenção: a carga excede a capacidade da área: ${areaExcedida.join(', ')}.`;
+        if (!reqAET) {
+            alertClass = "bg-amber-50 border-amber-200 text-amber-800";
+            iconColor = "text-amber-600";
+        }
     }
 
     const pH = 1.60; 
@@ -645,6 +811,7 @@ function draw3D(tr, pos, isCarreta) {
     const blueDark = mat(0x004085);
     const blueTampas = mat(0x0056b3);
     const white = mat(0xf8fafc);
+    const deckBase = mat(0x929ca6,0.62,0.32);
     const glass = mat(0x0a0a0a);
     const rubber = mat(0x111111);
     const rim = mat(0x475569);
@@ -652,6 +819,7 @@ function draw3D(tr, pos, isCarreta) {
     const steel = mat(0x1e293b);
     const wood = mat(0xd4a373);
     const siderMat = matTransp(0x1e293b, 0.88);
+    siderMat.depthWrite = false;
     
     // Novos materiais detalhados para Carretas
     const bumperRed = mat(0xdc2626);
@@ -708,6 +876,22 @@ function draw3D(tr, pos, isCarreta) {
         }
     }
 
+    function drawTrailerRearDetails(width,deckY,rearZ) {
+        const bumperY = deckY-0.38*S;
+        box(width*0.92,0.19*S,0.08*S,frame,0,bumperY,rearZ-0.045*S);
+        drawStripedBumper(width*0.9,0.14*S,0.035*S,0,bumperY,rearZ-0.11*S,16);
+
+        [-1,1].forEach(side=>{
+            const lightX=side*width*0.39;
+            box(0.3*S,0.24*S,0.05*S,frame,lightX,deckY-0.16*S,rearZ-0.075*S);
+            box(0.2*S,0.11*S,0.025*S,bumperRed,lightX,deckY-0.13*S,rearZ-0.11*S);
+            box(0.2*S,0.045*S,0.025*S,bumperWhite,lightX,deckY-0.21*S,rearZ-0.11*S);
+        });
+
+        box(0.56*S,0.24*S,0.045*S,frame,0,deckY-0.16*S,rearZ-0.08*S);
+        box(0.48*S,0.17*S,0.025*S,bumperWhite,0,deckY-0.16*S,rearZ-0.11*S);
+    }
+
     function box(w, h, d, material, x, y, z, group=trailerGroup, bevel=false) {
         if (!bevel) {
             return mesh(new THREE.BoxGeometry(Math.max(.02,w), Math.max(.02,h), Math.max(.02,d)), material, x, y, z, group);
@@ -760,27 +944,36 @@ function draw3D(tr, pos, isCarreta) {
         return tire;
     }
 
-    function drawDeckDetails(width,length,centerZ,topY) {
-        const sideBeam = mat(0x26384e,0.48,0.62);
-        const crossBeam = mat(0x334155,0.5,0.58);
-        const plankCount = 10;
-        const plankWidth = width*0.9/plankCount;
-        const plankLength = length*0.975;
+    function drawDeckDetails(width,length,centerZ,topY,includeStructure=true) {
+        if (includeStructure) {
+            const sideBeam = mat(0x26384e,0.48,0.62);
+            const crossBeam = mat(0x334155,0.5,0.58);
+            const plankCount = 10;
+            const plankWidth = width*0.9/plankCount;
+            const plankLength = length*0.975;
 
-        box(width*0.98,0.12*S,length*0.98,sideBeam,0,topY-0.18*S,centerZ);
-        [-1,1].forEach(side=>{
-            box(0.12*S,0.2*S,length,sideBeam,side*(width/2-0.08*S),topY-0.08*S,centerZ);
-        });
+            box(width*0.98,0.12*S,length*0.98,sideBeam,0,topY-0.18*S,centerZ);
+            [-1,1].forEach(side=>{
+                box(0.12*S,0.2*S,length,sideBeam,side*(width/2-0.08*S),topY-0.08*S,centerZ);
+            });
 
-        for(let i=0;i<plankCount;i++){
-            const x = -width*0.45+plankWidth*(i+0.5);
-            box(plankWidth*0.97,0.035*S,plankLength,wood,x,topY+0.018*S,centerZ);
-        }
+            for(let i=0;i<plankCount;i++){
+                const x = -width*0.45+plankWidth*(i+0.5);
+                box(plankWidth*0.97,0.035*S,plankLength,wood,x,topY+0.018*S,centerZ);
+            }
 
-        const beamCount = Math.max(4,Math.min(18,Math.ceil(length/(0.55*S))));
-        for(let i=0;i<=beamCount;i++){
-            const z = centerZ-length/2+length*i/beamCount;
-            box(width*1.04,0.1*S,0.1*S,crossBeam,0,topY-0.23*S,z);
+            const beamCount = Math.max(4,Math.min(18,Math.ceil(length/(0.55*S))));
+            for(let i=0;i<=beamCount;i++){
+                const z = centerZ-length/2+length*i/beamCount;
+                box(width*1.04,0.1*S,0.1*S,crossBeam,0,topY-0.23*S,z);
+            }
+        } else {
+            const plankCount = 10;
+            const plankWidth = width*0.9/plankCount;
+            for(let i=0;i<plankCount;i++){
+                const x = -width*0.45+plankWidth*(i+0.5);
+                box(plankWidth*0.98,0.035*S,length*0.975,wood,x,topY+0.025*S,centerZ);
+            }
         }
 
         const reflectorCount = Math.max(4,Math.min(24,Math.floor(length/(0.55*S))));
@@ -1208,7 +1401,10 @@ function draw3D(tr, pos, isCarreta) {
             });
         }
 
-        if (drawRevision === draw3DRevision) trailerGroup.add(object);
+        if (drawRevision === draw3DRevision) {
+            trailerGroup.add(object);
+            frameVehicleView();
+        }
     }).catch(error => console.error(`Erro ao carregar o cavalinho ${cabModelId}:`, error));
 
     const deckMat=usesChassisModel ? white : frame;
@@ -1217,9 +1413,9 @@ function draw3D(tr, pos, isCarreta) {
     if (isCarreta) {
         rearStart += shiftZ;
         const deckCenterZ=-mL/2+shiftZ;
-        box(wT,.24*S,mL,deckMat,0,deckY-.12*S,deckCenterZ);
+        box(wT,.24*S,mL,usesChassisModel?deckBase:deckMat,0,deckY-.12*S,deckCenterZ);
         box(wT*.94,.045*S,mL*.96,woodMat,0,deckY+.02*S,deckCenterZ);
-        drawDeckDetails(wT,mL,deckCenterZ,deckY+0.045*S);
+        drawDeckDetails(wT,mL,deckCenterZ,deckY+0.045*S,!usesChassisModel);
         const startAxleZ = rearStart + 1.2*S;
         
         if (usesChassisModel) {
@@ -1311,10 +1507,51 @@ function draw3D(tr, pos, isCarreta) {
         
         if (tr.tipo === 'sider') {
             const siderH = 2.8*S;
-            box(wT, siderH, mL, siderMat, 0, deckY + siderH/2, -mL/2 + shiftZ);
+            const centerZ = -mL/2+shiftZ;
+            const panelY = deckY+siderH/2;
+            [-1,1].forEach(side=>{
+                const panel=mesh(
+                    new THREE.PlaneGeometry(mL,siderH),
+                    siderMat,
+                    side*(wT/2+0.05*S),
+                    panelY,
+                    centerZ,
+                    trailerGroup,
+                    false
+                );
+                panel.rotation.y=side*Math.PI/2;
+            });
+            mesh(
+                new THREE.PlaneGeometry(wT,siderH),
+                siderMat,
+                0,
+                panelY,
+                shiftZ+0.02*S,
+                trailerGroup,
+                false
+            );
+            mesh(
+                new THREE.PlaneGeometry(wT,siderH),
+                siderMat,
+                0,
+                panelY,
+                rearStart-0.02*S,
+                trailerGroup,
+                false
+            );
+            const roof=mesh(
+                new THREE.PlaneGeometry(wT,mL),
+                siderMat,
+                0,
+                deckY+siderH,
+                centerZ,
+                trailerGroup,
+                false
+            );
+            roof.rotation.x=Math.PI/2;
         } else if (tr.tipo === 'carreta_bau') {
             const bodyH = 2.5*S;
-            box(wT * 0.98, bodyH, mL, carretaBauMat, 0, deckY + bodyH/2, -mL/2 + shiftZ);
+            box(wT * 0.98, bodyH, mL, carretaBauMat, 0, deckY + bodyH/2 + 0.005*S, -mL/2 + shiftZ - 0.015*S);
         } else {
             const tampH = 0.80*S; const tampT = 0.03*S;
             const includeSideboards=inputs.tampas.value === 'com';
@@ -1329,8 +1566,9 @@ function draw3D(tr, pos, isCarreta) {
             }
             drawTrailerSideboardDetails(wT,mL,deckY,tampH,tampT,deckCenterZ,includeSideboards);
         }
+        if (usesChassisModel) drawTrailerRearDetails(wT,deckY,rearStart);
     } else {
-        const dropL = tr.tipo==='reta' ? 0 : 1.2*S;
+        const dropL = getDeckTransitionLength(tr)*S;
         
         box(0.15*S, 0.3*S, pL, frame, -0.4*S, pH-0.15*S, -pL/2 + shiftZ);
         box(0.15*S, 0.3*S, pL, frame, 0.4*S, pH-0.15*S, -pL/2 + shiftZ);
@@ -1380,17 +1618,19 @@ function draw3D(tr, pos, isCarreta) {
     }
 
     // --- RENDERIZAÇÃO DAS CARGAS COMPOSTAS ---
-    let currentZ = (pos === 'pescoco') ? -0.5*S + shiftZ : (isCarreta ? -0.5*S + shiftZ : -pL - (tr.tipo === 'reta' ? 0 : 1.0*S) - 0.5*S + shiftZ);
+    let loadFrontZ = shiftZ;
+    if (pos !== 'pescoco' && !isCarreta) {
+        loadFrontZ -= pL + getDeckTransitionLength(tr)*S;
+    }
+    const loadSequence = getLoadSequenceMetrics(tr,isCarreta);
 
-    composicaoCargas.forEach((carga, index) => {
+    loadSequence.loads.forEach(({ carga, grid, startOffset, mesaStartOffset, pescocoStartOffset, splitCoils }) => {
         const cW = Math.max(.1, carga.larg) * S;
         const cH = Math.max(.1, carga.alt) * S;
         const cL = Math.max(.1, carga.comp) * S;
         
-        // Puxamos a matemática do grid para agrupar cargas repetidas
-        const grid = getGridMetrics(tr, carga.comp, carga.larg, carga.qtd, isCarreta);
         const loadY = (pos === 'pescoco' || tr.tipo === 'reta' ? pH : (isCarreta ? deckY : hT)) + cH/2;
-        const loadZ_start = currentZ;
+        const loadZ_start = loadFrontZ-startOffset*S;
         
         // O group base será montado apenas uma vez com o visual do tipo escolhido
         const baseItem = new THREE.Group();
@@ -1526,23 +1766,24 @@ function draw3D(tr, pos, isCarreta) {
         const equipmentSteel = mat(0x73808b,0.35,0.72);
 
         if(carga.type.startsWith('bobina_')){
-            const coilCount = carga.type.endsWith('_2') ? 2 : 1;
+            const coilCount = splitCoils ? 1 : (carga.type.endsWith('_2') ? 2 : 1);
             const axis = carga.type.includes('_lado_') ? 'x' : 'z';
-            const sectionLength = cL / coilCount;
+            const sectionLength = splitCoils ? cL/2 : cL/coilCount;
             const radius = Math.max(0.06*S,Math.min(cH,axis === 'x' ? sectionLength : cW)*0.46);
             const supportThickness = cH*0.08;
             const flangeOuterRadius = radius*1.08+Math.max(0.045*S,radius*0.055);
             const coilCenterY = -cH/2+supportThickness+flangeOuterRadius;
             for(let i=0;i<coilCount;i++){
-                const centerZ = -cL/2 + sectionLength*(i+0.5);
+                const centerZ = splitCoils ? 0 : -cL/2 + sectionLength*(i+0.5);
                 const coilLength = axis === 'x' ? cW*0.78 : sectionLength*0.78;
                 drawCoil(axis,radius,coilLength,0,coilCenterY,centerZ);
             }
-            cargoBox(cW*0.84,supportThickness,cL*0.92,navy,0,-cH/2+supportThickness/2,0);
+            cargoBox(cW*0.84,supportThickness,(splitCoils?sectionLength:cL)*0.92,navy,0,-cH/2+supportThickness/2,0);
         } else if(CONTAINER_LOAD_TYPES.has(carga.type)){
             let contColor = 0x176b87; 
             let logoColor = "#000000";
             
+            if (REEFER_LOAD_TYPES.has(carga.type) || carga.type === 'container_insulated_40') contColor = 0xe0e5e8;
             if (carga.armador === 'maersk') { contColor = 0xe0e5e8; } 
             else if (carga.armador === 'msc') { contColor = 0xd6c37f; logoColor = "#111111"; } 
             else if (carga.armador === 'hapag') { contColor = 0xea580c; logoColor = "#001b3a"; } 
@@ -1550,19 +1791,160 @@ function draw3D(tr, pos, isCarreta) {
             else if (carga.armador === 'cma') { contColor = 0x0f2142; logoColor = "#ffffff"; }
 
             const contMat = mat(contColor);
-            const ribD = 0.035 * S; 
-            cargoBox(cW - 2*ribD, cH, cL, contMat, 0, 0, 0); 
-            const ribs=Math.max(8,Math.min(64,Math.floor(cL/.22)));
-            const ribMat = mat(contColor); 
-            
-            for(let i=0;i<=ribs;i++){
-                const z=-cL/2+i*cL/ribs;
-                [-1,1].forEach(side=>cargoBox(ribD, cH*.94, .035*S, ribMat, side*(cW/2 - ribD/2), 0, z));
-            }
-            cargoBox(cW*.98,.08*S,cL*.98,navy,0,cH/2,0);
-            cargoBox(cW*.98,.08*S,cL*.98,navy,0,-cH/2,0);
+            const ribD = 0.035 * S;
+            const steelBlue = mat(0x263e5b,0.5,0.45);
+            const containerWood = mat(0x92704a,0.78,0.12);
+            const doorMat = mat(0x52667a,0.58,0.34);
+            const isFlatRack = FLAT_RACK_LOAD_TYPES.has(carga.type);
+            const isPlatform = FLAT_PLATFORM_LOAD_TYPES.has(carga.type);
+            const isTank = TANK_CONTAINER_LOAD_TYPES.has(carga.type);
+            const isSideOpen = SIDE_OPEN_LOAD_TYPES.has(carga.type);
+            const isOpenTop = OPEN_TOP_LOAD_TYPES.has(carga.type);
+            const isReefer = REEFER_LOAD_TYPES.has(carga.type);
+            const isVented = carga.type.startsWith('container_ventilated_');
+            const isBulk = carga.type.startsWith('container_bulk_');
+            const isDoubleDoor = carga.type.startsWith('container_double_door_');
+            const isHardTop = carga.type.startsWith('container_hard_top_');
 
-            if (carga.armador !== 'generico') {
+            if (isFlatRack || isPlatform) {
+                cargoBox(cW*0.94,cH*0.07,cL*0.97,steelBlue,0,-cH*0.43,0);
+                const plankCount = Math.max(6,Math.min(36,Math.floor(cL/(0.35*S))));
+                for(let i=0;i<plankCount;i++){
+                    const z=-cL*0.47+(i+0.5)*cL*0.94/plankCount;
+                    cargoBox(cW*0.9,cH*0.035,cL*0.94/plankCount*0.92,containerWood,0,-cH*0.38,z);
+                }
+                [-1,1].forEach(side=>{
+                    cargoBox(cW*0.035,cH*0.1,cL,steelBlue,side*cW*0.47,-cH*0.36,0);
+                    [-1,1].forEach(end=>{
+                        cargoBox(cW*0.04,cH*0.1,cH*0.04,steelBlue,side*cW*0.47,-cH*0.3,end*cL*0.47);
+                    });
+                });
+                if (isFlatRack) {
+                    [-1,1].forEach(end=>{
+                        cargoBeam([-cW*0.46,-cH*0.38,end*cL*0.46],[-cW*0.46,cH*0.43,end*cL*0.46],ribD*2.4,steelBlue);
+                        cargoBeam([cW*0.46,-cH*0.38,end*cL*0.46],[cW*0.46,cH*0.43,end*cL*0.46],ribD*2.4,steelBlue);
+                        cargoBeam([-cW*0.46,cH*0.43,end*cL*0.46],[cW*0.46,cH*0.43,end*cL*0.46],ribD*2.4,steelBlue);
+                        for(let i=1;i<5;i++){
+                            const x=-cW*0.4+i*cW*0.2;
+                            cargoBeam([x,-cH*0.38,end*cL*0.46],[x,cH*0.4,end*cL*0.46],ribD,steelBlue);
+                        }
+                    });
+                }
+            } else if (isTank) {
+                const tankRadius=Math.min(cW*0.34,cH*0.38);
+                buildCage(steelBlue,doorMat,false);
+                cargoBox(cW*0.9,cH*0.06,cL*0.9,steelBlue,0,-cH*0.46,0);
+                cylinderAlongZ(tankRadius,cL*0.78,bumperWhite,0,cH*0.02,0);
+                [-1,1].forEach(end=>{
+                    const head=mesh(
+                        new THREE.SphereGeometry(tankRadius,24,16,0,Math.PI*2,0,Math.PI/2),
+                        bumperWhite,0,cH*0.02,end*cL*0.39,baseItem
+                    );
+                    head.rotation.x=end<0?-Math.PI/2:Math.PI/2;
+                });
+                cargoBox(tankRadius*0.42,cH*0.14,tankRadius*0.42,steelBlue,0,cH*0.4,0);
+            } else {
+                const bodyHeight=isSideOpen?cH*0.12:cH;
+                cargoBox(cW-2*ribD,bodyHeight,cL,contMat,0,isSideOpen?-cH*0.44:0,0);
+                const ribs=Math.max(8,Math.min(64,Math.floor(cL/.22)));
+                const ribMat = mat(contColor);
+
+                for(let i=0;i<=ribs;i++){
+                    const z=-cL/2+i*cL/ribs;
+                    [-1,1].forEach(side=>{
+                        if(!isSideOpen || side<0){
+                            cargoBox(ribD,cH*.94,.035*S,ribMat,side*(cW/2-ribD/2),isSideOpen?-cH*0.05:0,z);
+                        }
+                    });
+                }
+                if(isSideOpen){
+                    cargoBox(cW,cH*.94,ribD,contMat,0,0,-cL/2+ribD/2);
+                    cargoBox(cW,cH*.94,ribD,contMat,0,0,cL/2-ribD/2);
+                    const postCount=Math.max(4,Math.min(16,Math.floor(cL/(0.9*S))));
+                    for(let i=0;i<=postCount;i++){
+                        const z=-cL/2+i*cL/postCount;
+                        cargoBox(ribD,cH*.94,ribD,steelBlue,cW*0.47,cH*0.02,z);
+                    }
+                    [-1,1].forEach(side=>{
+                        const door=cargoBox(cW*0.08,cH*0.82,cL*0.35,contMat,side*cW*0.42,0,side*cL*0.29);
+                        door.rotation.y=side*Math.PI/5;
+                    });
+                }
+                if(isVented){
+                    for(let row=0;row<5;row++){
+                        const y=-cH*0.28+row*cH*0.14;
+                        for(let side of [-1,1]){
+                            if(!isSideOpen || side<0) cargoBox(ribD*0.5,cH*0.035,cL*0.66,doorMat,side*cW*0.502,y,0);
+                        }
+                    }
+                }
+
+                const roofMat=isHardTop?steelBlue:contMat;
+                if(!isOpenTop){
+                    cargoBox(cW*.98,.08*S,cL*.98,roofMat,0,cH/2,0);
+                }else{
+                    cargoBox(cW*.06,.08*S,cL*.98,steelBlue,-cW*.47,cH/2,0);
+                    cargoBox(cW*.06,.08*S,cL*.98,steelBlue,cW*.47,cH/2,0);
+                    for(let i=0;i<6;i++){
+                        const z=-cL*.42+i*cL*.168;
+                        cargoBox(cW*.96,.045*S,.035*S,steelBlue,0,cH/2,z);
+                    }
+                }
+                cargoBox(cW*.98,.08*S,cL*.98,containerWood,0,-cH/2,0);
+
+                if(isOpenTop){
+                    const tarpMat=mat(carga.type==='container_mae_aberto'?0x0f172a:0x2563a6,0.86);
+                    const tarpGeometry=new THREE.PlaneGeometry(cW,cL,8,24);
+                    const positions=tarpGeometry.attributes.position;
+                    for(let i=0;i<positions.count;i++){
+                        const x=positions.getX(i);
+                        positions.setZ(i,0.075*S*(1-Math.pow(2*x/cW,2)));
+                    }
+                    tarpGeometry.computeVertexNormals();
+                    const tarp=mesh(tarpGeometry,tarpMat,0,cH/2+0.08*S,0,baseItem,false);
+                    tarp.rotation.x=-Math.PI/2;
+                    const strapMat=mat(0x1e293b);
+                    for(let i=0;i<5;i++){
+                        const z=-cL*0.4+i*cL*0.2;
+                        cargoBox(cW*1.01,0.025*S,0.035*S,strapMat,0,cH/2+0.035*S,z);
+                    }
+                }
+
+                for(let end of [-1,1]){
+                    cargoBox(cW*0.96,cH*.94,ribD,doorMat,0,0,end*(cL/2-ribD));
+                    for(let i=0;i<5;i++){
+                        const x=-cW*0.36+i*cW*0.18;
+                        cargoBox(cW*0.025,cH*.86,ribD*1.5,steelBlue,x,0,end*(cL/2+ribD*0.55));
+                    }
+                    cargoBox(cW*0.9,cH*.045,ribD*1.5,steelBlue,0,cH*0.24,end*(cL/2+ribD*0.55));
+                    cargoBox(cW*0.9,cH*.045,ribD*1.5,steelBlue,0,-cH*0.24,end*(cL/2+ribD*0.55));
+                    if(isDoubleDoor){
+                        cargoBox(cW*0.04,cH*.72,ribD*2.1,bumperWhite,0,0,end*(cL/2+ribD));
+                    }
+                }
+
+                if(isReefer){
+                    cargoBox(cW*.22,cH*.72,cH*.12,bumperWhite,0,0,cL/2+cH*.06);
+                    for(let i=0;i<5;i++){
+                        cargoBox(cW*.13,cH*.025,cH*.015,steelBlue,0,cH*.18-i*cH*.07,cL/2+cH*.13);
+                    }
+                    for(let side of [-1,1]){
+                        cargoBox(cW*.22,cH*.025,cL*.42,doorMat,side*cW*.503,cH*.2,0);
+                        cargoBox(cW*.22,cH*.025,cL*.42,doorMat,side*cW*.503,cH*.28,0);
+                    }
+                }
+
+                if(isBulk){
+                    const hatchCount=cL>20?4:2;
+                    for(let i=0;i<hatchCount;i++){
+                        const z=-cL*.33+i*cL*.66/Math.max(1,hatchCount-1);
+                        cargoBox(cW*.3,.1*S,cW*.24,steelBlue,0,cH/2+.06*S,z);
+                        cargoBox(cW*.16,.16*S,cW*.12,doorMat,0,cH/2+.17*S,z);
+                    }
+                }
+            }
+
+            if (carga.armador !== 'generico' && !isFlatRack && !isPlatform && !isTank) {
                 const canvas = document.createElement('canvas');
                 canvas.width = 1024; canvas.height = 256;
                 const ctx = canvas.getContext('2d');
@@ -1847,7 +2229,31 @@ function draw3D(tr, pos, isCarreta) {
         }
         
         // Clona a malha base do item a ser repetido no grid
-        for (let i = 0; i < carga.qtd; i++) {
+        if (splitCoils) {
+            const coilLength = cL/2;
+            const neckOffset = pescocoStartOffset;
+            const mesaOffset = mesaStartOffset;
+            const neckFrontZ = shiftZ-neckOffset*S;
+            const mesaFrontZ = shiftZ-pL-getDeckTransitionLength(tr)*S-mesaOffset*S;
+            const neckY = pH+cH/2;
+            const mesaY = (tr.tipo==='reta'?pH:hT)+cH/2;
+
+            for(let i=0;i<carga.qtd;i++){
+                const r=Math.floor(i/grid.maxCols);
+                const c=i%grid.maxCols;
+                const rowItems=Math.min(grid.maxCols,carga.qtd-r*grid.maxCols);
+                const rowW=rowItems*cW+Math.max(0,rowItems-1)*GAP*S;
+                const itemX=-rowW/2+cW/2+c*(cW+GAP*S);
+                const rowOffset=r*(coilLength+GAP)*S;
+                const neckItem=baseItem.clone();
+                neckItem.position.set(itemX,neckY,neckFrontZ-coilLength/2-rowOffset);
+                loadGroup.add(neckItem);
+
+                const mesaItem=baseItem.clone();
+                mesaItem.position.set(itemX,mesaY,mesaFrontZ-coilLength/2-rowOffset);
+                loadGroup.add(mesaItem);
+            }
+        } else for (let i = 0; i < carga.qtd; i++) {
             const r = Math.floor(i / grid.maxCols);
             const c = i % grid.maxCols;
             
@@ -1862,12 +2268,11 @@ function draw3D(tr, pos, isCarreta) {
             loadGroup.add(inst);
         }
         
-        // Atualiza a posição inicial Z para o PRÓXIMO bloco da composição da lista 
-        currentZ -= (grid.totalComp * S + (GAP * S));
     });
     
     // Ajusta a Câmera
-    const totalLen = Math.max(10, 4.5*S+(isCarreta?mL:(tr.tipo==='reta'?pL+mL:pL+1.0*S+mL+bridgeL))+4.5*S);
+    const cameraTransitionLength = tr.tipo === 'reta' ? 0 : (tr.transicao ?? 1.0);
+    const totalLen = Math.max(10, 4.5*S+(isCarreta?mL:pL+cameraTransitionLength*S+mL+bridgeL)+4.5*S);
     const compensacaoFrente = 0.5 * S;
     const centerZ = (isCarreta ? -mL/2 + shiftZ : -pL-mL/2 + shiftZ) + compensacaoFrente;
     
@@ -1911,12 +2316,15 @@ function drawSide2D(ctx, canvas, tr, pos, isCarreta) {
     let maxCargaH = 0;
     composicaoCargas.forEach(c => { if(c.alt > maxCargaH) maxCargaH = c.alt; });
     
-    const wTotal = cTractor + (isCarreta ? tr.mesa : tr.pescoco + (tr.tipo === 'reta' ? 0 : 1.0) + tr.mesa + bridgeL) + 2; 
+    const trailerSpan = isCarreta
+        ? tr.mesa
+        : tr.pescoco + getDeckTransitionLength(tr) + tr.mesa + bridgeL;
+    const wTotal = cTractor + trailerSpan + 2;
     const hTotal = Math.max(5.0, (tr.tipo === 'reta' || isCarreta ? 1.6 : Math.max(1.6, tr.h)) + maxCargaH + 2); 
 
     const scale = Math.min((canvas.width - 20) / wTotal, (canvas.height - 20) / hTotal);
     const groundY = canvas.height - 15;
-    const startX = 20 + (cTractor * scale); 
+    const startX = 20 + trailerSpan * scale;
     
     const drawWheel = (cx, rFac=1) => {
         const r = 0.5 * scale * rFac;
@@ -1945,7 +2353,7 @@ function drawSide2D(ctx, canvas, tr, pos, isCarreta) {
             ctx.fillRect(startX - pL - mL, groundY - pH, mL, 0.3*scale);
             for(let i=0; i<tr.eixos; i++) drawWheel(startX - pL - mL + 1*scale + (i*1.1*scale));
         } else {
-            const dropL = 1.0 * scale;
+            const dropL = getDeckTransitionLength(tr) * scale;
             ctx.beginPath(); ctx.moveTo(startX - pL, groundY - pH); ctx.lineTo(startX - pL - dropL, groundY - hT);
             ctx.lineTo(startX - pL - dropL, groundY - hT + 0.3*scale); ctx.lineTo(startX - pL, groundY - pH + 0.3*scale); ctx.fill();
             ctx.fillRect(startX - pL - dropL - mL, groundY - hT, mL, 0.3*scale); 
@@ -1953,30 +2361,42 @@ function drawSide2D(ctx, canvas, tr, pos, isCarreta) {
         }
     }
 
-    let cX_start;
-    if(isCarreta) {
-        cX_start = startX - 0.5*scale;
-    } else if(pos === 'pescoco' || tr.tipo === 'reta') {
-        cX_start = startX - 0.5*scale; 
-    } else {
-        cX_start = startX - pL - (1.0*scale) - 0.5*scale; 
+    let loadFrontX = startX;
+    if (pos !== 'pescoco' && !isCarreta) {
+        loadFrontX -= pL + getDeckTransitionLength(tr)*scale;
     }
 
     if (tr.tipo === 'sider') ctx.globalAlpha = 0.5;
     
-    let currentX = cX_start;
-    composicaoCargas.forEach(carga => {
-        const grid = getGridMetrics(tr, carga.comp, carga.larg, carga.qtd, isCarreta);
+    const loadSequence = getLoadSequenceMetrics(tr,isCarreta);
+    loadSequence.loads.forEach(({ carga, grid, startOffset, mesaStartOffset, pescocoStartOffset, splitCoils }) => {
         const cL = carga.comp * scale;
         const cH = carga.alt * scale;
+        if (splitCoils) {
+            const coilLength = cL/2;
+            const neckOffset = pescocoStartOffset;
+            const mesaOffset = mesaStartOffset;
+            const neckFrontX = startX-neckOffset*scale;
+            const mesaFrontX = startX-pL-getDeckTransitionLength(tr)*scale-mesaOffset*scale;
+            const neckY = groundY-pH-cH;
+            const mesaY = groundY-(tr.tipo==='reta'?pH:hT)-cH;
+
+            for(let i=0;i<carga.qtd;i++){
+                const r=Math.floor(i/grid.maxCols);
+                const rowOffset=r*(coilLength+GAP)*scale;
+                drawCargoRect(ctx,neckFrontX-coilLength-rowOffset,neckY,coilLength,cH,carga);
+                drawCargoRect(ctx,mesaFrontX-coilLength-rowOffset,mesaY,coilLength,cH,carga);
+            }
+            return;
+        }
+
         const cY = (pos === 'pescoco' || tr.tipo === 'reta' || isCarreta ? groundY - pH - cH : groundY - hT - cH);
+        const currentX = loadFrontX-startOffset*scale;
         
         for (let r = 0; r < grid.rows; r++) {
             const itemX = currentX - cL - r * (carga.comp + GAP) * scale;
             drawCargoRect(ctx, itemX, cY, cL, cH, carga);
         }
-        
-        currentX -= (grid.totalComp + GAP) * scale;
     });
 
     ctx.globalAlpha = 1.0;
@@ -2016,6 +2436,13 @@ function drawRear2D(ctx, canvas, tr, pos, isCarreta) {
     ctx.fillStyle = '#1e293b';
     ctx.fillRect(centerX - tW/2 + 0.1*scale, groundY - 1.0*scale, 0.6*scale, 1.0*scale);
     ctx.fillRect(centerX + tW/2 - 0.7*scale, groundY - 1.0*scale, 0.6*scale, 1.0*scale);
+    ctx.fillStyle = '#1e293b';
+    ctx.fillRect(centerX-tW*0.46,groundY-0.68*scale,tW*0.92,0.2*scale);
+    const reflectorWidth=tW*0.92/12;
+    for(let i=0;i<12;i++){
+        ctx.fillStyle=i%2===0?'#dc2626':'#f8fafc';
+        ctx.fillRect(centerX-tW*0.46+i*reflectorWidth,groundY-0.66*scale,reflectorWidth,0.14*scale);
+    }
 
     if (widestCarga) {
         const grid = getGridMetrics(tr, widestCarga.comp, widestCarga.larg, widestCarga.qtd, isCarreta);
@@ -2057,17 +2484,24 @@ window.addEventListener('resize', () => {
 const tipoCargaSelect = document.getElementById('input_tipo_carga');
 const divArmador = document.getElementById('div_armador');
 const inputArmador = document.getElementById('input_armador');
+const containerOptions = document.createElement('optgroup');
+containerOptions.label = 'Containers offshore';
 
 LOAD_TYPES.forEach(({ value, label }) => {
     const option = document.createElement('option');
     option.value = value;
     option.textContent = label;
-    tipoCargaSelect.appendChild(option);
+    if (value.startsWith('container_')) {
+        containerOptions.appendChild(option);
+    } else {
+        tipoCargaSelect.appendChild(option);
+    }
 });
+tipoCargaSelect.appendChild(containerOptions);
 
 tipoCargaSelect.addEventListener('change', () => {
     const val = tipoCargaSelect.value;
-    if(CONTAINER_LOAD_TYPES.has(val)) {
+    if(CONTAINER_LOAD_TYPES.has(val) && !UNBRANDED_CONTAINER_TYPES.has(val)) {
         divArmador.classList.remove('hidden');
     } else {
         divArmador.classList.add('hidden');
@@ -2091,6 +2525,7 @@ els.btnReset.addEventListener('click', () => {
 });
 
 window.addEventListener('load', () => {
+    inputs.cavalinho.value = 'scania_s_730';
     initThreeJS();
     updateTrailerInfo();
     renderListaCargas();

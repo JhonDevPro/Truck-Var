@@ -40,11 +40,11 @@
                 <div class="bg-slate-50 border border-slate-200 p-3 rounded-md mb-2">
                     <label class="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">Selecionar Cavalinho</label>
                     <select id="input_cavalinho" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold bg-white text-slate-700">
-                        <option value="semi_obj" selected>Cavalinho atual</option>
+                        <option value="semi_obj">Cavalinho atual</option>
                         <option value="tractor_cab_burnout_3">Tractor Cab Burnout 3</option>
                         <option value="fortnite_semi_truck">Fortnite Semi Truck</option>
                         <option value="semi_truck_burnout_revenge">Semi Truck Burnout Revenge</option>
-                        <option value="scania_s_730">Scania S-730</option>
+                        <option value="scania_s_730" selected>Scania S-730</option>
                     </select>
                 </div>
                 
@@ -55,6 +55,7 @@
                         <option value="">-- Nenhuma Prancha --</option>
                         <option value="prancha_reb_6_3" selected>Prancha Rebaixada 3 Eixos (Mesa 6.3m)</option>
                         <option value="prancha_reb_7_0">Prancha Rebaixada 3 Eixos (Mesa 7.0m)</option>
+                        <option value="prancha_reb_6_0">Prancha Rebaixada 3 Eixos (Mesa 6.0m)</option>
                         <option value="prancha_reta_12_5">Prancha Reta 3 Eixos (Mesa 12.5m)</option>
                         <option value="prancha_semi_3_9">Prancha Semi-Reta 3 Eixos (Mesa 3.9m)</option>
                         <option value="prancha_reb_4_11_3">Prancha Rebaixada 4 Eixos (Mesa 11.3m)</option>
@@ -89,8 +90,16 @@
                         <input type="text" id="info_pescoco" class="w-full rounded border border-slate-200 px-2 py-1 text-sm bg-slate-100 font-mono text-slate-600" readonly>
                     </div>
                     <div>
-                        <label class="block text-[10px] font-semibold text-slate-500 mb-1">Comp. Carga (m)</label>
+                        <label class="block text-[10px] font-semibold text-slate-500 mb-1">Mesa / berço (m)</label>
                         <input type="text" id="info_mesa" class="w-full rounded border border-slate-200 px-2 py-1 text-sm bg-slate-100 font-mono text-slate-600" readonly>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-semibold text-slate-500 mb-1">Área total de carga (m)</label>
+                        <input type="text" id="info_area_carga" class="w-full rounded border border-slate-200 px-2 py-1 text-sm bg-slate-100 font-mono text-slate-600" readonly>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-semibold text-slate-500 mb-1">Comprimento total (m)</label>
+                        <input type="text" id="info_comp_total" class="w-full rounded border border-slate-200 px-2 py-1 text-sm bg-slate-100 font-mono text-slate-600" readonly>
                     </div>
                 </div>
 

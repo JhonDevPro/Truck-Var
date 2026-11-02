@@ -1,4 +1,4 @@
-const CACHE_NAME = 'felka-cargas-v3';
+const CACHE_NAME = 'felka-cargas-v4';
 const APP_SHELL = [
     './',
     './index.html',
@@ -35,7 +35,7 @@ self.addEventListener('fetch', event => {
 
     const url = new URL(request.url);
     const sameOrigin = url.origin === self.location.origin;
-    const isLargeModel = /\.(glb|gltf|obj|mtl)$/i.test(url.pathname);
+    const isLargeModel = /\.(glb|gltf|obj|mtl)(\.gz)?$/i.test(url.pathname);
     const isLargeTexture = /\.(png|jpe?g)$/i.test(url.pathname) && !url.pathname.includes('/icons/');
 
     if (sameOrigin && (isLargeModel || isLargeTexture)) return;
