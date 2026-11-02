@@ -56,7 +56,7 @@ self.addEventListener('fetch', event => {
         }
 
         try {
-            const response = await fetch(request);
+            const response = await fetch(request, { cache: 'no-cache' });
             if (response.ok) await cache.put(request, response.clone());
             return response;
         } catch (error) {

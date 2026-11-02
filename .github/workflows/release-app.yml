@@ -58,7 +58,7 @@ jobs:
           distribution: temurin
           java-version: 17
       - name: Prepare web app
-        run: npm run build:web
+        run: npm run build:android:web
       - name: Install Capacitor
         run: npm install --no-audit --no-fund
       - name: Generate Android project

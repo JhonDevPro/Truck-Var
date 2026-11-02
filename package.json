@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build:web": "node .github/scripts/prepare-site.mjs"
+    "build:web": "node .github/scripts/prepare-site.mjs",
+    "build:android:web": "node .github/scripts/prepare-site.mjs --android-shell"
   },
   "dependencies": {
     "@capacitor/android": "6.2.0",

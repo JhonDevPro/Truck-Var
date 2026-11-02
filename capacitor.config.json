@@ -2,5 +2,9 @@
   "appId": "br.com.felka.calculadoracargas",
   "appName": "Truck Var",
   "webDir": "dist",
-  "bundledWebRuntime": false
+  "bundledWebRuntime": false,
+  "server": {
+    "url": "https://jhondevpro.github.io/Truck-Var/",
+    "cleartext": false
+  }
 }
