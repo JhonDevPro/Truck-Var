@@ -163,6 +163,26 @@ const LOAD_TYPES = [
     { value: 'container_double_door_20', label: 'Dupla porta 20 pés (ref.)', preset: [5.896, 2.350, 2.385, 4] },
     { value: 'container_side_open_20', label: 'Abertura lateral 20 pés (ref.)', preset: [5.896, 2.350, 2.385, 4] },
     { value: 'container_tank_20', label: 'Tanque ISO 20 pés (ref.)', preset: [5.896, 2.350, 2.385, 4] },
+    { value: 'container_high_cube_20', label: 'High Cube 20 pés (ref.)', preset: [5.896, 2.350, 2.697, 4] },
+    { value: 'container_reefer_high_cube_20', label: 'Reefer High Cube 20 pés (ref.)', preset: [5.451, 2.280, 2.415, 4] },
+    { value: 'container_hard_top_20', label: 'Hard Top 20 pés (ref.)', preset: [5.896, 2.350, 2.393, 4] },
+    { value: 'container_insulated_20', label: 'Isolado 20 pés (ref.)', preset: [5.896, 2.350, 2.393, 4] },
+    { value: 'container_pallet_wide_20', label: 'Pallet Wide 20 pés (ref.)', preset: [5.896, 2.440, 2.393, 4] },
+    { value: 'container_platform_20', label: 'Plataforma 20 pés (ref.)', preset: [5.896, 2.350, 2.393, 4] },
+    { value: 'container_dry_10', label: 'Dry 10 pés (ref.)', preset: [2.831, 2.350, 2.385, 2] },
+    { value: 'container_reefer_10', label: 'Reefer 10 pés (ref.)', preset: [2.831, 2.290, 2.157, 2] },
+    { value: 'container_flat_rack_10', label: 'Flat Rack dobrável 10 pés (ref.)', preset: [2.831, 2.418, 1.943, 2] },
+    { value: 'container_ventilated_10', label: 'Ventilado 10 pés (ref.)', preset: [2.831, 2.350, 2.385, 2] },
+    { value: 'container_bulk_10', label: 'Graneleiro 10 pés (ref.)', preset: [2.831, 2.350, 2.385, 2] },
+    { value: 'container_double_door_10', label: 'Dupla porta 10 pés (ref.)', preset: [2.831, 2.350, 2.385, 2] },
+    { value: 'container_side_open_10', label: 'Abertura lateral 10 pés (ref.)', preset: [2.831, 2.350, 2.385, 2] },
+    { value: 'container_tank_10', label: 'Tanque ISO 10 pés (ref.)', preset: [2.831, 2.350, 2.385, 2] },
+    { value: 'container_high_cube_10', label: 'High Cube 10 pés (ref.)', preset: [2.831, 2.350, 2.697, 2] },
+    { value: 'container_reefer_high_cube_10', label: 'Reefer High Cube 10 pés (ref.)', preset: [2.831, 2.280, 2.415, 2] },
+    { value: 'container_hard_top_10', label: 'Hard Top 10 pés (ref.)', preset: [2.831, 2.350, 2.393, 2] },
+    { value: 'container_insulated_10', label: 'Isolado 10 pés (ref.)', preset: [2.831, 2.350, 2.393, 2] },
+    { value: 'container_pallet_wide_10', label: 'Pallet Wide 10 pés (ref.)', preset: [2.831, 2.440, 2.393, 2] },
+    { value: 'container_platform_10', label: 'Plataforma 10 pés (ref.)', preset: [2.831, 2.350, 2.393, 2] },
     { value: 'container_dry_40', label: 'Dry 40 pés', preset: [12.035, 2.350, 2.393, 8] },
     { value: 'container_high_cube_40', label: 'High Cube 40 pés', preset: [12.035, 2.350, 2.697, 8] },
     { value: 'container_reefer_high_cube_40', label: 'Reefer High Cube 40 pés', preset: [11.578, 2.280, 2.415, 8] },
@@ -190,11 +210,21 @@ const OPEN_TOP_LOAD_TYPES = new Set([
     'container_mae', 'container_mae_aberto', 'container_20', 'container_40',
     'container_10', 'container_baby'
 ]);
-const FLAT_RACK_LOAD_TYPES = new Set(['container_flat_rack_20', 'container_flat_rack_40']);
-const REEFER_LOAD_TYPES = new Set(['container_reefer_20', 'container_reefer_high_cube_40']);
-const FLAT_PLATFORM_LOAD_TYPES = new Set(['container_platform_40']);
-const SIDE_OPEN_LOAD_TYPES = new Set(['container_side_open_20', 'container_side_open_40']);
-const TANK_CONTAINER_LOAD_TYPES = new Set(['container_tank_20']);
+const FLAT_RACK_LOAD_TYPES = new Set(LOAD_TYPES
+    .filter(({ value }) => value.startsWith('container_flat_rack_'))
+    .map(({ value }) => value));
+const REEFER_LOAD_TYPES = new Set(LOAD_TYPES
+    .filter(({ value }) => value.startsWith('container_reefer_'))
+    .map(({ value }) => value));
+const FLAT_PLATFORM_LOAD_TYPES = new Set(LOAD_TYPES
+    .filter(({ value }) => value.startsWith('container_platform_'))
+    .map(({ value }) => value));
+const SIDE_OPEN_LOAD_TYPES = new Set(LOAD_TYPES
+    .filter(({ value }) => value.startsWith('container_side_open_'))
+    .map(({ value }) => value));
+const TANK_CONTAINER_LOAD_TYPES = new Set(LOAD_TYPES
+    .filter(({ value }) => value.startsWith('container_tank_'))
+    .map(({ value }) => value));
 const UNBRANDED_CONTAINER_TYPES = new Set([
     ...FLAT_RACK_LOAD_TYPES,
     ...FLAT_PLATFORM_LOAD_TYPES,
@@ -1813,23 +1843,22 @@ function draw3D(tr, pos, isCarreta) {
                     const z=-cL*0.47+(i+0.5)*cL*0.94/plankCount;
                     cargoBox(cW*0.9,cH*0.035,cL*0.94/plankCount*0.92,containerWood,0,-cH*0.38,z);
                 }
-                [-1,1].forEach(side=>{
-                    cargoBox(cW*0.035,cH*0.1,cL,steelBlue,side*cW*0.47,-cH*0.36,0);
-                    [-1,1].forEach(end=>{
-                        cargoBox(cW*0.04,cH*0.1,cH*0.04,steelBlue,side*cW*0.47,-cH*0.3,end*cL*0.47);
-                    });
-                });
                 if (isFlatRack) {
                     [-1,1].forEach(end=>{
-                        cargoBeam([-cW*0.46,-cH*0.38,end*cL*0.46],[-cW*0.46,cH*0.43,end*cL*0.46],ribD*2.4,steelBlue);
-                        cargoBeam([cW*0.46,-cH*0.38,end*cL*0.46],[cW*0.46,cH*0.43,end*cL*0.46],ribD*2.4,steelBlue);
-                        cargoBeam([-cW*0.46,cH*0.43,end*cL*0.46],[cW*0.46,cH*0.43,end*cL*0.46],ribD*2.4,steelBlue);
-                        for(let i=1;i<5;i++){
-                            const x=-cW*0.4+i*cW*0.2;
-                            cargoBeam([x,-cH*0.38,end*cL*0.46],[x,cH*0.4,end*cL*0.46],ribD,steelBlue);
-                        }
+                        cargoBox(cW*0.88,cH*0.74,ribD*2.8,steelBlue,0,cH*0.03,end*cL*0.46);
+                        [-1,1].forEach(side=>{
+                            cargoBox(ribD*2.8,cH*0.82,ribD*3.2,steelBlue,side*cW*0.44,cH*0.02,end*cL*0.46);
+                            for(let row=0;row<8;row++){
+                                const y=-cH*0.29+row*cH*0.09;
+                                cargoBox(cW*0.83,cH*0.025,ribD*0.7,mat(0x3c5d80),0,y,end*cL*0.46+side*ribD*1.5);
+                            }
+                        });
+                        cargoBox(cW*0.92,ribD*2.8,ribD*3.2,steelBlue,0,cH*0.42,end*cL*0.46);
                     });
                 }
+                [-1,1].forEach(side=>{
+                    cargoBox(cW*0.035,cH*0.1,cL,steelBlue,side*cW*0.47,-cH*0.36,0);
+                });
             } else if (isTank) {
                 const tankRadius=Math.min(cW*0.34,cH*0.38);
                 buildCage(steelBlue,doorMat,false);
