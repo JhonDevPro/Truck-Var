@@ -1,4 +1,4 @@
-import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
@@ -14,11 +14,11 @@ const files = [
     'tractor_cab_burnout_3.glb',
     'fortnite_semi_truck.glb',
     'semi_truck_burnout_revenge.glb',
+    'scania_S-730.glb',
     'chassi-para-carreta-14-15.glb'
 ];
 
 await mkdir(output, { recursive: true });
-await rm(resolve(output, 'scania_S-730.glb'), { force: true });
 
 for (const file of files) {
     await cp(resolve(root, file), resolve(output, file));

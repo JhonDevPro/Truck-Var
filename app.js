@@ -314,24 +314,32 @@ function loadCabModel(modelId) {
             : new Promise((resolve, reject) => {
                 const loader = new THREE.GLTFLoader();
                 if (model.compression === 'gzip') {
-                    if (window.location.protocol === 'file:') {
+                    const loadUncompressedModel = () => new Promise((resolve, reject) => {
                         loader.load('./scania_S-730.glb', gltf => resolve(gltf.scene), undefined, reject);
+                    });
+                    if (window.location.protocol === 'file:') {
+                        loadUncompressedModel().then(resolve, reject);
                         return;
                     }
                     fetch(model.url)
                         .then(response => {
                             if (!response.ok) {
-                                throw new Error(`Falha ao baixar o modelo (${response.status}).`);
+                                throw new Error(`Falha ao baixar o modelo comprimido (${response.status}).`);
                             }
                             if (typeof DecompressionStream !== 'function' || !response.body) {
-                                throw new Error('Este dispositivo não oferece suporte à descompressão do modelo Scania.');
+                                throw new Error('Este dispositivo não oferece suporte à descompressão do modelo.');
                             }
                             return new Response(
                                 response.body.pipeThrough(new DecompressionStream('gzip'))
-                            ).arrayBuffer();
+                            ).arrayBuffer().then(data => new Promise((resolve, reject) => {
+                                loader.parse(data, './', gltf => resolve(gltf.scene), reject);
+                            }));
                         })
-                        .then(data => loader.parse(data, './', gltf => resolve(gltf.scene), reject))
-                        .catch(reject);
+                        .catch(error => {
+                            console.warn('Falha ao carregar o modelo Scania comprimido; tentando a versão original.', error);
+                            return loadUncompressedModel();
+                        })
+                        .then(resolve, reject);
                     return;
                 }
                 loader.load(model.url, gltf => resolve(gltf.scene), undefined, reject);
