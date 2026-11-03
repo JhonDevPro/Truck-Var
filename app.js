@@ -166,7 +166,7 @@ const LOAD_TYPES = [
     { value: 'bobina_frente_2', label: '2 bobinas — faces para frente', preset: [6, 3, 3, 24] },
     { value: 'skid', label: 'Skid offshore', preset: [6, 3, 3.8, 18] },
     { value: 'container_mae', label: 'Coração de Mãe (Fechado)', preset: [4, 4, 4, 12] },
-    { value: 'container_mae_aberto', label: 'Coração de Mãe (Aberto)', preset: [4, 4, 4, 12] },
+    { value: 'coracao_mae_aberto', label: 'Coração de Mãe (Aberto)', preset: [4, 4, 4, 12] },
     { value: 'container_20', label: 'Open Top 20 pés (lona)', preset: [5.919, 2.340, 2.286, 4] },
     { value: 'container_40', label: 'Open Top 40 pés (lona)', preset: [12.043, 2.338, 2.272, 8] },
     { value: 'container_10', label: 'Open Top 10 pés (ref.)', preset: [3.05, 2.44, 2.59, 2] },
@@ -223,7 +223,7 @@ const CONTAINER_LOAD_TYPES = new Set(LOAD_TYPES
     .filter(({ value }) => value.startsWith('container_'))
     .map(({ value }) => value));
 const OPEN_TOP_LOAD_TYPES = new Set([
-    'container_mae', 'container_mae_aberto', 'container_20', 'container_40',
+    'container_mae', 'container_20', 'container_40',
     'container_10', 'container_baby'
 ]);
 const FLAT_RACK_LOAD_TYPES = new Set(LOAD_TYPES
@@ -2246,7 +2246,7 @@ function draw3D(tr, pos, isCarreta) {
                 cargoBox(cW*.98,.08*S,cL*.98,containerWood,0,-cH/2,0);
 
                 if(isOpenTop){
-                    const tarpMat=mat(carga.type==='container_mae_aberto'?0x0f172a:0x2563a6,0.86);
+                    const tarpMat=mat(0x2563a6,0.86);
                     const tarpGeometry=new THREE.PlaneGeometry(cW,cL,8,24);
                     const positions=tarpGeometry.attributes.position;
                     for(let i=0;i<positions.count;i++){
@@ -2534,10 +2534,39 @@ function draw3D(tr, pos, isCarreta) {
                 }
             }
             cargoBox(cW*1.02,.12*S,cL*.98,navy,0,-cH/2-.08*S,0);
-        } else if(carga.type==='container_mae_aberto'){
-            buildCage(cageOrange,mat(0xf2a128),true);
-            cargoBox(cW*0.78,cH*0.54,cL*0.76,equipmentBeige,0,-cH*0.02,0);
-            cargoBox(cW*0.78,0.08*S,cL*0.76,mat(0xd6bd87),0,cH*0.27,0);
+        } else if(carga.type==='coracao_mae_aberto'){
+            const cageFrame = mat(0x6b5843,0.62,0.42);
+            const cageHighlights = mat(0x9ca36a,0.48,0.28);
+            const vesselMaterial = mat(0xc64b2f,0.42,0.5);
+            buildCage(cageFrame,cageHighlights,true);
+
+            const vesselRadius = Math.min(cW,cL)*0.16;
+            const vesselHeight = cH*0.62;
+            const vesselBaseY = -cH/2 + cH*0.1;
+            const vesselCenterY = vesselBaseY + vesselHeight/2;
+            const vessel = mesh(
+                new THREE.CylinderGeometry(vesselRadius,vesselRadius,vesselHeight,32),
+                vesselMaterial,
+                0,vesselCenterY,0,
+                baseItem
+            );
+            vessel.castShadow = true;
+            vessel.receiveShadow = true;
+
+            [-1,1].forEach(end => {
+                const head = mesh(
+                    new THREE.SphereGeometry(vesselRadius,24,16),
+                    vesselMaterial,
+                    0,
+                    vesselCenterY + end * vesselHeight * 0.43,
+                    0,
+                    baseItem
+                );
+                head.scale.set(1,0.38,1);
+                cargoBox(vesselRadius*0.5,cH*0.08,vesselRadius*0.5,cageFrame,0,
+                    vesselCenterY + end * (vesselHeight*0.5 + cH*0.025),0);
+            });
+            cargoBox(cW*0.58,cH*0.045,cL*0.58,cageFrame,0,vesselBaseY,0);
         } else if(carga.type==='tanque'){
             buildCage(cageSteel,cageAccent,true);
             const tankRadius = Math.min(cW,cH)*0.34;
