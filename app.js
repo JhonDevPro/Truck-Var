@@ -587,8 +587,8 @@ function getTubeMetrics(tr) {
 
 function getTubePositions(tube, limit = Math.min(tube.loaded, 1200)) {
     const positions = [];
-    for (let layer = 0; layer < tube.layerCounts.length && positions.length < limit; layer++) {
-        const count = tube.layerCounts[layer];
+    for (let layer = 0; layer < tube.loadedLayerCounts.length && positions.length < limit; layer++) {
+        const count = Math.min(tube.loadedLayerCounts[layer], limit - positions.length);
         for (let index = 0; index < count && positions.length < limit; index++) {
             positions.push({
                 xMm: (index - (count - 1) / 2) * tube.diameterMm,
