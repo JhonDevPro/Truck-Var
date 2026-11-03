@@ -329,6 +329,7 @@ const tubeResults = {
     height: document.getElementById('tube_result_height'),
     weight: document.getElementById('tube_result_weight'),
     trips: document.getElementById('tube_result_trips'),
+    distribution: document.getElementById('tube_result_distribution'),
     warning: document.getElementById('tube_result_warning')
 };
 
@@ -510,7 +511,11 @@ function getTubeMetrics(tr) {
     const maxCapacity = layerCounts.reduce((total, count) => total + count, 0);
     const requestedPerTruck = Math.floor(readNumber(tubeInputs.perTruck));
     const requestedLoad = requestedPerTruck > 0 ? requestedPerTruck : maxCapacity;
-    const loaded = Math.min(requestedLoad, maxCapacity);
+    const geometricLoad = Math.min(requestedLoad, maxCapacity);
+    const weightCapacity = weightKg > 0
+        ? Math.floor(trailerCapacityT * 1000 / weightKg)
+        : maxCapacity;
+    const loaded = Math.min(geometricLoad, weightCapacity);
     let remainingLoad = loaded;
     const loadedLayerCounts = layerCounts.map(count => {
         const loadedInLayer = Math.min(remainingLoad, count);
@@ -536,6 +541,11 @@ function getTubeMetrics(tr) {
     }
     if (requestedPerTruck > maxCapacity) {
         warnings.push(`A quantidade solicitada por carreta excede a capacidade geométrica de ${maxCapacity} tubos; a prévia mostra a quantidade que cabe.`);
+    }
+    if (loaded < geometricLoad && weightKg > 0) {
+        warnings.push(loaded > 0
+            ? `Quantidade por carreta reduzida de ${geometricLoad} para ${loaded} tubos para respeitar o limite de peso (${trailerCapacityT.toFixed(2)} t).${trips === null ? ' Informe o total para estimar as viagens necessárias.' : ` O total informado será distribuído em ${trips} viagens.`}`
+            : `Cada tubo pesa mais que a capacidade informada da carreta; não é possível carregar tubos sem exceder o limite de peso.`);
     }
     if (tubeLengthM > tr.mesa) {
         warnings.push(`O tubo tem ${tubeLengthM.toFixed(2)} m e ultrapassa a mesa de ${tr.mesa.toFixed(2)} m.`);
@@ -563,6 +573,7 @@ function getTubeMetrics(tr) {
         loadedLayerCounts,
         loadedLayers,
         maxCapacity,
+        weightCapacity,
         requestedLoad,
         loaded,
         totalToTransport,
@@ -868,6 +879,15 @@ function renderTubeResults(tube) {
     tubeResults.height.textContent = `${format(tube.stackHeightMm / 1000, 2)} m`;
     tubeResults.weight.textContent = tube.weightT === null ? 'Não informado' : `${format(tube.weightT, 2)} t`;
     tubeResults.trips.textContent = tube.trips === null ? '—' : format(tube.trips);
+    if (tube.trips === null) {
+        tubeResults.distribution.textContent = '—';
+    } else {
+        const fullTrips = Math.floor(tube.totalToTransport / tube.loaded);
+        const finalTripLoad = tube.totalToTransport % tube.loaded;
+        tubeResults.distribution.textContent = finalTripLoad === 0
+            ? `${format(tube.trips)} carretas com ${format(tube.loaded)} tubos cada`
+            : `${format(fullTrips)} carretas com ${format(tube.loaded)} tubos e 1 com ${format(finalTripLoad)}`;
+    }
     tubeResults.warning.textContent = tube.warnings.join(' ');
     tubeResults.warning.classList.toggle('hidden', tube.warnings.length === 0);
 }
