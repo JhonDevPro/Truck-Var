@@ -300,7 +300,17 @@ const els = {
     btnAdicionar: document.getElementById('btn_adicionar_carga'),
     btnReset: document.getElementById('btn_reset'),
     listaCargas: document.getElementById('lista_composicao'),
-    badgeQtd: document.getElementById('badge_qtd_cargas')
+    badgeQtd: document.getElementById('badge_qtd_cargas'),
+    cargoSummary: {
+        container: document.getElementById('cargo_analysis_summary'),
+        units: document.getElementById('cargo_summary_units'),
+        types: document.getElementById('cargo_summary_types'),
+        weight: document.getElementById('cargo_summary_weight'),
+        length: document.getElementById('cargo_summary_length'),
+        items: document.getElementById('cargo_summary_items'),
+        empty: document.getElementById('cargo_summary_empty')
+    },
+    tubeSummary: document.getElementById('tube_analysis_summary')
 };
 
 const tubeInputs = {
@@ -329,8 +339,7 @@ const tubeResults = {
     height: document.getElementById('tube_result_height'),
     weight: document.getElementById('tube_result_weight'),
     trips: document.getElementById('tube_result_trips'),
-    distribution: document.getElementById('tube_result_distribution'),
-    warning: document.getElementById('tube_result_warning')
+    distribution: document.getElementById('tube_result_distribution')
 };
 
 const ctxSide = els.sideCanvas.getContext('2d');
@@ -888,8 +897,34 @@ function renderTubeResults(tube) {
             ? `${format(tube.trips)} carretas com ${format(tube.loaded)} tubos cada`
             : `${format(fullTrips)} carretas com ${format(tube.loaded)} tubos e 1 com ${format(finalTripLoad)}`;
     }
-    tubeResults.warning.textContent = tube.warnings.join(' ');
-    tubeResults.warning.classList.toggle('hidden', tube.warnings.length === 0);
+}
+
+function renderCargoAnalysisSummary(loadSequence, totalWeight) {
+    const format = (value, digits = 0) => Number(value).toLocaleString('pt-BR', {
+        minimumFractionDigits: digits,
+        maximumFractionDigits: digits
+    });
+    const totalUnits = composicaoCargas.reduce((total, carga) => total + carga.qtd, 0);
+    els.cargoSummary.units.textContent = format(totalUnits);
+    els.cargoSummary.types.textContent = format(composicaoCargas.length);
+    els.cargoSummary.weight.textContent = `${format(totalWeight, 2)} t`;
+    els.cargoSummary.length.textContent = `${format(loadSequence.totalComp, 2)} m`;
+    els.cargoSummary.items.replaceChildren();
+    els.cargoSummary.empty.classList.toggle('hidden', composicaoCargas.length > 0);
+
+    loadSequence.loads.forEach(({ carga }) => {
+        const typeLabel = LOAD_TYPES.find(type => type.value === carga.type)?.label || 'Carga';
+        const item = document.createElement('li');
+        item.className = 'flex justify-between gap-2 border-t border-slate-100 pt-2';
+        const description = document.createElement('span');
+        description.className = 'font-semibold text-slate-700';
+        description.textContent = `${format(carga.qtd)}x ${typeLabel}`;
+        const weight = document.createElement('span');
+        weight.className = 'shrink-0 text-slate-500';
+        weight.textContent = `${format(carga.peso * carga.qtd, 2)} t`;
+        item.append(description, weight);
+        els.cargoSummary.items.appendChild(item);
+    });
 }
 
 function analyzeTubesAndDraw(tr, isCarreta) {
@@ -983,6 +1018,7 @@ function analyzeAndDraw() {
         if (grid.totalLarg > totalLargMax) totalLargMax = grid.totalLarg;
         if (carga.alt > maxAlt) maxAlt = carga.alt;
     });
+    renderCargoAnalysisSummary(loadSequence, pesoTotal);
 
     let reqAET = false;
     let aetMotivo = "";
@@ -3297,6 +3333,8 @@ function setCargaTab(tab) {
     tabTubos.setAttribute('aria-selected', String(isTubes));
     panelCargas.classList.toggle('hidden', isTubes);
     panelTubos.classList.toggle('hidden', !isTubes);
+    els.cargoSummary.container.classList.toggle('hidden', isTubes);
+    els.tubeSummary.classList.toggle('hidden', !isTubes);
     document.getElementById('view_3d_title').textContent = isTubes
         ? 'Tubos sobre a carroceria (3D)'
         : 'Vista 3D (Arraste e Role)';
