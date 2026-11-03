@@ -59,6 +59,22 @@ const cabGrayTextureCache = new WeakMap();
 // --- ESTADO GLOBAL DA COMPOSIÇÃO DE CARGAS ---
 let composicaoCargas = [];
 let editingCargaIndex = null;
+let activeCargaTab = 'cargas';
+let tubeInputUpdateTimer = null;
+let tubeStrappingEnabled = true;
+let cargoTrailerSelectionBeforeTubes = null;
+
+const TUBE_TRAILER_IDS = new Set([
+    'carreta_ext',
+    'carreta_bau_15',
+    'carreta_padrao',
+    'carreta_vand',
+    'carreta_sider'
+]);
+
+function getTubeLengthForTrailer(tr) {
+    return tr.mesa >= 15 ? 14 : 13;
+}
 
 function brightenCabTexture(texture) {
     if (!texture || !texture.image) return texture;
@@ -287,6 +303,35 @@ const els = {
     badgeQtd: document.getElementById('badge_qtd_cargas')
 };
 
+const tubeInputs = {
+    diameter: document.getElementById('tube_diameter'),
+    unit: document.getElementById('tube_unit'),
+    outerDiameter: document.getElementById('tube_outer_diameter'),
+    width: document.getElementById('tube_width'),
+    height: document.getElementById('tube_height'),
+    length: document.getElementById('tube_length'),
+    firstSleeper: document.getElementById('tube_first_sleeper'),
+    layerSleeper: document.getElementById('tube_layer_sleeper'),
+    weight: document.getElementById('tube_weight'),
+    trailerCapacity: document.getElementById('tube_trailer_capacity'),
+    arrangement: document.getElementById('tube_arrangement'),
+    perRow: document.getElementById('tube_per_row'),
+    perTruck: document.getElementById('tube_per_truck'),
+    total: document.getElementById('tube_total')
+};
+
+const tubeResults = {
+    diameter: document.getElementById('tube_result_diameter'),
+    row: document.getElementById('tube_result_row'),
+    layers: document.getElementById('tube_result_layers'),
+    capacity: document.getElementById('tube_result_capacity'),
+    loaded: document.getElementById('tube_result_loaded'),
+    height: document.getElementById('tube_result_height'),
+    weight: document.getElementById('tube_result_weight'),
+    trips: document.getElementById('tube_result_trips'),
+    warning: document.getElementById('tube_result_warning')
+};
+
 const ctxSide = els.sideCanvas.getContext('2d');
 const ctxRear = els.rearCanvas.getContext('2d');
 
@@ -401,6 +446,7 @@ function getActiveTrailerId() {
 
 inputs.cavalinho.addEventListener('change', analyzeAndDraw);
 inputs.posicao.addEventListener('change', analyzeAndDraw);
+inputs.tampas.addEventListener('change', analyzeAndDraw);
 inputs.placa_prancha.addEventListener('change', () => {
     if(inputs.placa_prancha.value) inputs.placa_carreta.value = "";
     updateTrailerInfo();
@@ -424,6 +470,122 @@ function getGridMetrics(tr, cComp, cLarg, cQtd, isCarreta) {
     const totalLarg = maxItemsInRow * cLarg + Math.max(0, maxItemsInRow - 1) * GAP;
 
     return { maxCols, rows, totalComp, totalLarg, availableWidth };
+}
+
+function getTubeMetrics(tr) {
+    const readNumber = input => {
+        const value = Number.parseFloat(input.value);
+        return Number.isFinite(value) ? value : 0;
+    };
+    const nominalDiameter = readNumber(tubeInputs.diameter);
+    const realDiameter = readNumber(tubeInputs.outerDiameter);
+    const diameterMm = realDiameter > 0
+        ? realDiameter
+        : nominalDiameter * (tubeInputs.unit.value === 'in' ? 25.4 : 1);
+    const widthMm = readNumber(tubeInputs.width);
+    const heightMm = readNumber(tubeInputs.height);
+    const firstSleeperMm = readNumber(tubeInputs.firstSleeper);
+    const layerSleeperMm = readNumber(tubeInputs.layerSleeper);
+    const tubeLengthM = getTubeLengthForTrailer(tr);
+    const weightKg = readNumber(tubeInputs.weight);
+    const trailerCapacityT = readNumber(tubeInputs.trailerCapacity);
+    const automaticPerRow = diameterMm > 0 ? Math.floor(widthMm / diameterMm) : 0;
+    const requestedPerRow = Math.floor(readNumber(tubeInputs.perRow));
+    const perRow = requestedPerRow > 0
+        ? Math.min(requestedPerRow, automaticPerRow)
+        : automaticPerRow;
+    const layerPitchMm = diameterMm + layerSleeperMm;
+    const heightLimitedLayers = diameterMm > 0 && layerPitchMm > 0 && heightMm >= firstSleeperMm + diameterMm
+        ? Math.max(0, Math.floor((heightMm - firstSleeperMm + layerSleeperMm) / layerPitchMm))
+        : 0;
+    const layers = tubeInputs.arrangement.value === 'piramidal'
+        ? Math.min(heightLimitedLayers, perRow)
+        : heightLimitedLayers;
+    const layerCounts = [];
+    for (let layer = 0; layer < layers; layer++) {
+        layerCounts.push(tubeInputs.arrangement.value === 'piramidal'
+            ? Math.max(0, perRow - layer)
+            : perRow);
+    }
+    const maxCapacity = layerCounts.reduce((total, count) => total + count, 0);
+    const requestedPerTruck = Math.floor(readNumber(tubeInputs.perTruck));
+    const requestedLoad = requestedPerTruck > 0 ? requestedPerTruck : maxCapacity;
+    const loaded = Math.min(requestedLoad, maxCapacity);
+    let remainingLoad = loaded;
+    const loadedLayerCounts = layerCounts.map(count => {
+        const loadedInLayer = Math.min(remainingLoad, count);
+        remainingLoad -= loadedInLayer;
+        return loadedInLayer;
+    });
+    const loadedLayers = loadedLayerCounts.filter(count => count > 0).length;
+    const totalToTransport = Math.floor(readNumber(tubeInputs.total));
+    const stackHeightMm = loadedLayers > 0
+        ? firstSleeperMm + diameterMm + (loadedLayers - 1) * layerPitchMm
+        : 0;
+    const weightT = weightKg > 0 ? loaded * weightKg / 1000 : null;
+    const trips = totalToTransport > 0 && loaded > 0
+        ? Math.ceil(totalToTransport / loaded)
+        : null;
+    const warnings = [];
+
+    if (diameterMm <= 0 || widthMm <= 0 || heightMm <= 0 || tubeLengthM <= 0) {
+        warnings.push('Informe valores maiores que zero para diâmetro, largura, altura e comprimento.');
+    }
+    if (requestedPerRow > automaticPerRow && automaticPerRow > 0) {
+        warnings.push(`A fileira foi limitada a ${automaticPerRow} tubos para caber na largura útil.`);
+    }
+    if (requestedPerTruck > maxCapacity) {
+        warnings.push(`A quantidade solicitada por carreta excede a capacidade geométrica de ${maxCapacity} tubos; a prévia mostra a quantidade que cabe.`);
+    }
+    if (tubeLengthM > tr.mesa) {
+        warnings.push(`O tubo tem ${tubeLengthM.toFixed(2)} m e ultrapassa a mesa de ${tr.mesa.toFixed(2)} m.`);
+    }
+    if (maxCapacity === 0 && diameterMm > 0) {
+        warnings.push('Não há espaço para acomodar tubos com as dimensões informadas.');
+    }
+    if (loaded > 0 && weightT !== null && weightT > trailerCapacityT) {
+        warnings.push(`O peso estimado (${weightT.toFixed(2)} t) excede a capacidade informada (${trailerCapacityT.toFixed(2)} t).`);
+    }
+
+    return {
+        diameterMm,
+        widthMm,
+        heightMm,
+        firstSleeperMm,
+        layerSleeperMm,
+        tubeLengthM,
+        weightKg,
+        trailerCapacityT,
+        automaticPerRow,
+        perRow,
+        layers,
+        layerCounts,
+        loadedLayerCounts,
+        loadedLayers,
+        maxCapacity,
+        requestedLoad,
+        loaded,
+        totalToTransport,
+        stackHeightMm,
+        widthOccupiedMm: perRow * diameterMm,
+        weightT,
+        trips,
+        warnings
+    };
+}
+
+function getTubePositions(tube, limit = Math.min(tube.loaded, 1200)) {
+    const positions = [];
+    for (let layer = 0; layer < tube.layerCounts.length && positions.length < limit; layer++) {
+        const count = tube.layerCounts[layer];
+        for (let index = 0; index < count && positions.length < limit; index++) {
+            positions.push({
+                xMm: (index - (count - 1) / 2) * tube.diameterMm,
+                layer
+            });
+        }
+    }
+    return positions;
 }
 
 function getLoadSequenceMetrics(tr, isCarreta) {
@@ -575,9 +737,19 @@ els.btnCancelarEdicao.addEventListener('click', cancelarEdicaoCarga);
 
 
 function updateTrailerInfo() {
+    if (activeCargaTab === 'tubos' && !TUBE_TRAILER_IDS.has(getActiveTrailerId())) {
+        inputs.placa_prancha.value = "";
+        inputs.placa_carreta.value = "carreta_padrao";
+    }
+
+    inputs.placa_prancha.disabled = activeCargaTab === 'tubos';
+    document.getElementById('tube_trailer_rule').classList.toggle('hidden', activeCargaTab !== 'tubos');
     const placa = getActiveTrailerId();
     if(bdVeiculos[placa]) {
         currentTrailer = bdVeiculos[placa];
+        tubeInputs.width.value = Math.round((currentTrailer.w_util || currentTrailer.w) * 1000);
+        tubeInputs.length.value = getTubeLengthForTrailer(currentTrailer).toFixed(2);
+        tubeInputs.trailerCapacity.value = currentTrailer.cap.toFixed(1);
         infos.largura.value = currentTrailer.w.toFixed(2);
         infos.altura.value = currentTrailer.h.toFixed(2);
         infos.mesa.value = currentTrailer.mesa.toFixed(2);
@@ -683,10 +855,96 @@ function initThreeJS() {
     animate();
 }
 
+function renderTubeResults(tube) {
+    const format = (value, digits = 0) => Number(value).toLocaleString('pt-BR', {
+        minimumFractionDigits: digits,
+        maximumFractionDigits: digits
+    });
+    tubeResults.diameter.textContent = tube.diameterMm > 0 ? `${format(tube.diameterMm, 1)} mm` : '—';
+    tubeResults.row.textContent = format(tube.perRow);
+    tubeResults.layers.textContent = format(tube.layers);
+    tubeResults.capacity.textContent = `${format(tube.maxCapacity)} tubos`;
+    tubeResults.loaded.textContent = `${format(tube.loaded)} tubos`;
+    tubeResults.height.textContent = `${format(tube.stackHeightMm / 1000, 2)} m`;
+    tubeResults.weight.textContent = tube.weightT === null ? 'Não informado' : `${format(tube.weightT, 2)} t`;
+    tubeResults.trips.textContent = tube.trips === null ? '—' : format(tube.trips);
+    tubeResults.warning.textContent = tube.warnings.join(' ');
+    tubeResults.warning.classList.toggle('hidden', tube.warnings.length === 0);
+}
+
+function analyzeTubesAndDraw(tr, isCarreta) {
+    const tube = getTubeMetrics(tr);
+    renderTubeResults(tube);
+
+    const floorHeight = tr.tipo === 'reta' || (!isCarreta && inputs.posicao.value === 'pescoco')
+        ? 1.6
+        : tr.h;
+    const totalHeight = floorHeight + tube.stackHeightMm / 1000;
+    const excessWidth = Math.max(0, (tube.widthOccupiedMm / 1000 - tr.w) / 2);
+    const lengthUsage = tube.tubeLengthM;
+    const lengthPercent = tr.mesa > 0 ? lengthUsage / tr.mesa * 100 : 0;
+    const weightPercent = tube.trailerCapacityT > 0 && tube.weightT !== null
+        ? tube.weightT / tube.trailerCapacityT * 100
+        : 0;
+    const hardLimitExceeded = totalHeight > 4.4 ||
+        (tube.weightT !== null && tube.weightT > tube.trailerCapacityT) ||
+        tube.widthOccupiedMm / 1000 > tr.w;
+    const operationalWarning = tube.loaded === 0 ||
+        tube.requestedLoad > tube.maxCapacity ||
+        tube.tubeLengthM > tr.mesa ||
+        tube.weightT === null ||
+        tube.warnings.length > 0;
+
+    els.resAltTotal.textContent = totalHeight.toFixed(2);
+    els.avisoAlt.textContent = totalHeight > 4.4 ? 'Excesso de altura!' : 'Altura total da carreta + tubos';
+    els.avisoAlt.className = `text-[10px] mt-1 font-semibold ${totalHeight > 4.4 ? 'text-red-600' : 'text-slate-500'}`;
+    els.resExcLat.textContent = excessWidth.toFixed(2);
+    els.resCompTotal.textContent = `de ${tr.mesa.toFixed(2)}m (carroceria)`;
+    els.resCompUso.textContent = `${lengthUsage.toFixed(2)}m usados`;
+    els.barComp.style.width = `${Math.min(100, lengthPercent)}%`;
+    els.barComp.className = `h-full transition-all duration-500 ${lengthPercent > 100 ? 'bg-red-500' : 'bg-blue-500'}`;
+    els.resCompUso.className = `text-[10px] font-bold ${lengthPercent > 100 ? 'text-red-600' : 'text-blue-700'}`;
+    els.resPesoTotal.textContent = `de ${tube.trailerCapacityT.toFixed(1)}t`;
+    els.resPesoUso.textContent = tube.weightT === null ? 'Peso não informado' : `${tube.weightT.toFixed(2)}t total`;
+    els.barPeso.style.width = `${Math.min(100, weightPercent)}%`;
+    els.barPeso.className = `h-full transition-all duration-500 ${weightPercent > 100 ? 'bg-red-500' : 'bg-emerald-500'}`;
+    els.resPesoUso.className = `text-[10px] font-bold ${weightPercent > 100 ? 'text-red-600' : 'text-emerald-700'}`;
+
+    if (tube.loaded === 0) {
+        els.titleAet.textContent = 'SEM TUBOS NA CONFIGURAÇÃO';
+        els.descAet.textContent = tube.warnings[0] || 'Ajuste os parâmetros para visualizar o arranjo.';
+    } else if (hardLimitExceeded) {
+        els.titleAet.textContent = 'REVISAR LIMITES DA CARGA';
+        els.descAet.textContent = tube.warnings.join(' ') || 'A carga excede um dos limites do veículo.';
+    } else if (operationalWarning) {
+        els.titleAet.textContent = 'ATENÇÃO OPERACIONAL';
+        els.descAet.textContent = tube.warnings.join(' ') ||
+            'Informe o peso por tubo para conferir a capacidade de carga.';
+    } else {
+        els.titleAet.textContent = 'ARRANJO DE TUBOS';
+        els.descAet.textContent = 'Dimensões e peso informado dentro dos limites da carreta.';
+    }
+
+    const alertClass = hardLimitExceeded
+        ? 'bg-red-50 border-red-200 text-red-800'
+        : operationalWarning
+            ? 'bg-amber-50 border-amber-200 text-amber-800'
+            : 'bg-green-50 border-green-200 text-green-800';
+    els.alertAet.className = `rounded-md p-4 shadow-sm border transition-colors duration-300 ${alertClass}`;
+    els.iconAet.className = `w-5 h-5 ${hardLimitExceeded ? 'text-red-600' : operationalWarning ? 'text-amber-600' : 'text-green-600'}`;
+
+    draw3D(tr, inputs.posicao.value, isCarreta);
+    draw2D(tr, inputs.posicao.value, isCarreta);
+}
+
 function analyzeAndDraw() {
     const tr = currentTrailer;
     const pos = inputs.posicao.value;
     const isCarreta = tr.tipo.includes('carreta') || tr.tipo === 'vanderleia' || tr.tipo === 'sider';
+    if (activeCargaTab === 'tubos') {
+        analyzeTubesAndDraw(tr, isCarreta);
+        return;
+    }
     const usesGates = isCarreta && inputs.tampas.value === 'com' && tr.tipo !== 'sider' && tr.tipo !== 'carreta_bau';
     const availableWidth = usesGates ? tr.w_util : tr.w;
     let espacoDisponivel = pos === 'mesa' || isCarreta ? tr.mesa : tr.pescoco;
@@ -1660,7 +1918,9 @@ function draw3D(tr, pos, isCarreta) {
     if (pos !== 'pescoco' && !isCarreta) {
         loadFrontZ -= pL + getDeckTransitionLength(tr)*S;
     }
-    const loadSequence = getLoadSequenceMetrics(tr,isCarreta);
+    const loadSequence = activeCargaTab === 'tubos'
+        ? { loads: [] }
+        : getLoadSequenceMetrics(tr,isCarreta);
 
     loadSequence.loads.forEach(({ carga, grid, startOffset, mesaStartOffset, pescocoStartOffset, splitCoils }) => {
         const cW = Math.max(.1, carga.larg) * S;
@@ -2306,6 +2566,288 @@ function draw3D(tr, pos, isCarreta) {
         }
         
     });
+
+    if (activeCargaTab === 'tubos') {
+        const tube = getTubeMetrics(tr);
+        const tubePositions = getTubePositions(tube, Math.min(tube.loaded, 1200));
+        if (tubePositions.length && tube.tubeLengthM > 0) {
+            const diameter = tube.diameterMm / 1000 * S;
+            const radius = diameter / 2;
+            const length = tube.tubeLengthM * S;
+            const deckHeight = (tr.tipo === 'reta' || (!isCarreta && pos === 'pescoco')) ? pH : (isCarreta ? deckY : hT);
+            const centerZ = shiftZ - mL / 2;
+            const pipeMaterial = mat(0x8795a1, 0.3, 0.78);
+            const endMaterial = mat(0x26323b, 0.38, 0.7);
+            const pipeGeometry = new THREE.CylinderGeometry(radius, radius, length, 16, 1, false);
+            const pipeMesh = new THREE.InstancedMesh(pipeGeometry, pipeMaterial, tubePositions.length);
+            const pipeQuaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI / 2, 0, 0));
+            const unitScale = new THREE.Vector3(1, 1, 1);
+            const matrixObject = new THREE.Object3D();
+
+            tubePositions.forEach((position, index) => {
+                matrixObject.position.set(
+                    position.xMm / 1000 * S,
+                    deckHeight + (tube.firstSleeperMm + tube.diameterMm / 2 +
+                        position.layer * (tube.diameterMm + tube.layerSleeperMm)) / 1000 * S,
+                    centerZ
+                );
+                matrixObject.quaternion.copy(pipeQuaternion);
+                matrixObject.scale.copy(unitScale);
+                matrixObject.updateMatrix();
+                pipeMesh.setMatrixAt(index, matrixObject.matrix);
+            });
+            pipeMesh.instanceMatrix.needsUpdate = true;
+            pipeMesh.castShadow = true;
+            pipeMesh.receiveShadow = true;
+            loadGroup.add(pipeMesh);
+
+            const endGeometry = new THREE.TorusGeometry(radius * 0.9, Math.max(radius * 0.07, 0.015 * S), 6, 16);
+            const endMesh = new THREE.InstancedMesh(endGeometry, endMaterial, tubePositions.length * 2);
+            tubePositions.forEach((position, index) => {
+                const centerY = deckHeight + (tube.firstSleeperMm + tube.diameterMm / 2 +
+                    position.layer * (tube.diameterMm + tube.layerSleeperMm)) / 1000 * S;
+                [-1, 1].forEach((side, endIndex) => {
+                    matrixObject.position.set(
+                        position.xMm / 1000 * S,
+                        centerY,
+                        centerZ + side * (length / 2 - 0.015 * S)
+                    );
+                    matrixObject.quaternion.identity();
+                    matrixObject.scale.copy(unitScale);
+                    matrixObject.updateMatrix();
+                    endMesh.setMatrixAt(index * 2 + endIndex, matrixObject.matrix);
+                });
+            });
+            endMesh.instanceMatrix.needsUpdate = true;
+            endMesh.castShadow = true;
+            loadGroup.add(endMesh);
+
+            const wood = mat(0x80552f, 0.86, 0.05);
+            const supportWidth = Math.max(0.1 * S, tube.widthOccupiedMm / 1000 * S);
+            const supportDepth = Math.max(0.08 * S, 0.12 * S);
+            const supportCount = 3;
+            for (let layer = 0; layer < tube.loadedLayers; layer++) {
+                const supportHeight = (layer === 0 ? tube.firstSleeperMm : tube.layerSleeperMm) / 1000 * S;
+                const supportY = layer === 0
+                    ? deckHeight + supportHeight / 2
+                    : deckHeight + (tube.firstSleeperMm + layer * tube.diameterMm +
+                        (layer - 0.5) * tube.layerSleeperMm) / 1000 * S;
+                for (let support = 0; support < supportCount; support++) {
+                    const supportZ = centerZ + (support - 1) * length * 0.34;
+                    box(supportWidth, supportHeight, supportDepth, wood, 0, supportY, supportZ, loadGroup);
+                }
+            }
+
+            const postMaterial = mat(0x202a32, 0.55, 0.55);
+            const postHeight = tube.stackHeightMm / 1000 * S + 0.3 * S;
+            const postX = Math.min(tr.w * S / 2 - 0.08 * S, tube.widthOccupiedMm / 2000 * S + 0.1 * S);
+            [-1, 1].forEach(side => {
+                for (let post = 0; post < supportCount; post++) {
+                    const postZ = centerZ + (post - 1) * Math.min(length * 0.34, mL * 0.34);
+                    box(0.07 * S, postHeight, 0.09 * S, postMaterial, side * postX,
+                        deckHeight + postHeight / 2, postZ, loadGroup);
+                }
+            });
+
+            if (tubeStrappingEnabled) {
+                const strapMaterial = mat(0xf59e0b, 0.45, 0.12);
+                const halfBundleWidth = tube.widthOccupiedMm / 2000 * S;
+                const bundleHeight = tube.stackHeightMm / 1000 * S;
+                const strapPositions = [-0.39, -0.13, 0.13, 0.39];
+                const strapRadius = 0.025 * S;
+                const strapSideClearance = strapRadius + 0.035 * S;
+                const strapTopClearance = strapRadius + 0.04 * S;
+
+                strapPositions.forEach(position => {
+                    const strapZ = centerZ + position * Math.min(length, mL * 0.92);
+                    const points = [
+                        [-halfBundleWidth - strapSideClearance, deckHeight + 0.08 * S, strapZ],
+                        [-halfBundleWidth - strapSideClearance, deckHeight + bundleHeight * 0.48, strapZ],
+                        [-halfBundleWidth - strapSideClearance, deckHeight + bundleHeight - strapRadius, strapZ],
+                        [-halfBundleWidth - strapRadius * 0.35, deckHeight + bundleHeight + strapTopClearance * 0.72, strapZ],
+                        [0, deckHeight + bundleHeight + strapTopClearance, strapZ],
+                        [halfBundleWidth + strapRadius * 0.35, deckHeight + bundleHeight + strapTopClearance * 0.72, strapZ],
+                        [halfBundleWidth + strapSideClearance, deckHeight + bundleHeight - strapRadius, strapZ],
+                        [halfBundleWidth + strapSideClearance, deckHeight + bundleHeight * 0.48, strapZ],
+                        [halfBundleWidth + strapSideClearance, deckHeight + 0.08 * S, strapZ]
+                    ].map(point => new THREE.Vector3(...point));
+                    const strapCurve = new THREE.CatmullRomCurve3(points, false, 'centripetal');
+                    const strap = mesh(
+                        new THREE.TubeGeometry(strapCurve, 64, strapRadius, 8, false),
+                        strapMaterial,
+                        0,
+                        0,
+                        0,
+                        loadGroup
+                    );
+                    strap.castShadow = true;
+                });
+
+                const netMaterial = mat(0xf97316, 0.65, 0.08);
+                const netPitch = 0.34 * S;
+                const netHeight = bundleHeight + 0.12 * S;
+                const netSegments = [];
+                const netRopeRadius = 0.012 * S;
+                const hasSideboards = inputs.tampas.value === 'com' ||
+                    tr.tipo === 'sider' || tr.tipo === 'carreta_bau';
+                const sideboardThickness = 0.03 * S;
+                const netWidth = tube.widthOccupiedMm / 1000 * S + 0.14 * S;
+                const insideHalfWidth = hasSideboards
+                    ? Math.max(0, wT / 2 - sideboardThickness - netRopeRadius - 0.01 * S)
+                    : netWidth / 2;
+                const visibleNetWidth = Math.min(netWidth, insideHalfWidth * 2);
+                const netColumns = Math.max(4, Math.min(20, Math.ceil(visibleNetWidth / netPitch)));
+                const netRows = Math.max(3, Math.min(14, Math.ceil(netHeight / netPitch)));
+
+                function addDrapedNet(pointAt, columns, rows) {
+                    const point = (column, row) => pointAt(
+                        column / columns,
+                        row / rows
+                    );
+                    const connect = (start, end) => netSegments.push([start, end]);
+
+                    for (let row = 0; row <= rows; row++) {
+                        for (let column = 0; column < columns; column++) {
+                            connect(point(column, row), point(column + 1, row));
+                        }
+                    }
+                    for (let row = 0; row < rows; row++) {
+                        for (let column = 0; column <= columns; column++) {
+                            connect(point(column, row), point(column, row + 1));
+                            if (column < columns) {
+                                if ((column + row) % 2 === 0) {
+                                    connect(point(column, row), point(column + 1, row + 1));
+                                } else {
+                                    connect(point(column + 1, row), point(column, row + 1));
+                                }
+                            }
+                        }
+                    }
+                }
+
+                [-1, 1].forEach(end => {
+                    const endZ = centerZ + end * length / 2;
+                    const halfNetWidth = netWidth / 2;
+                    const flapLength = Math.min(0.9 * S, length * 0.12);
+                    const bottomY = deckHeight + 0.04 * S;
+                    const topY = deckHeight + bundleHeight + 0.04 * S;
+
+                    if (hasSideboards) {
+                        const endboardZ = end > 0
+                            ? shiftZ - sideboardThickness / 2
+                            : shiftZ - mL + sideboardThickness / 2;
+                        const insideEndZ = endboardZ -
+                            end * (sideboardThickness / 2 + netRopeRadius + 0.01 * S);
+                        const endGap = Math.max(0, Math.abs(insideEndZ - endZ) - netRopeRadius * 1.5);
+                        const endGapRows = Math.max(4, Math.ceil(endGap / netPitch));
+                        const insideSideX = insideHalfWidth;
+
+                        addDrapedNet((u, v) => {
+                            const x = -insideHalfWidth + u * visibleNetWidth;
+                            const z = endZ + end * v * endGap;
+                            const sag = Math.sin(u * Math.PI) * Math.sin(v * Math.PI) * 0.08 * S;
+                            return new THREE.Vector3(x, topY - sag, z);
+                        }, netColumns, endGapRows);
+
+                        addDrapedNet((u, v) => {
+                            const x = -insideHalfWidth + u * visibleNetWidth;
+                            const y = bottomY + v * bundleHeight;
+                            const drape = Math.sin(u * Math.PI) * Math.sin(v * Math.PI) * 0.06 * S;
+                            return new THREE.Vector3(x, y, insideEndZ - end * drape);
+                        }, netColumns, netRows);
+
+                        [-1, 1].forEach(side => {
+                            const sideSpan = Math.min(Math.abs(insideEndZ - endZ), flapLength);
+                            addDrapedNet((u, v) => {
+                                const xDrape = Math.sin(u * Math.PI) * 0.035 * S;
+                                return new THREE.Vector3(
+                                    side * (insideSideX - xDrape),
+                                    bottomY + v * bundleHeight,
+                                    insideEndZ - end * u * sideSpan
+                                );
+                            }, Math.max(4, Math.ceil(sideSpan / netPitch)), netRows);
+                        });
+                        return;
+                    }
+
+                    addDrapedNet((u, v) => {
+                        const x = -halfNetWidth + u * netWidth;
+                        const y = bottomY + v * bundleHeight;
+                        const bulge = Math.sin(u * Math.PI) * Math.sin(v * Math.PI) * 0.1 * S;
+                        return new THREE.Vector3(
+                            x,
+                            y,
+                            endZ + end * (0.08 * S + (1 - v) * 0.12 * S + bulge)
+                        );
+                    }, netColumns, netRows);
+
+                    addDrapedNet((u, v) => {
+                        const x = -halfNetWidth + u * netWidth;
+                        const drape = Math.sin(u * Math.PI) * Math.sin(v * Math.PI) * 0.08 * S;
+                        return new THREE.Vector3(
+                            x,
+                            topY - drape,
+                            endZ + end * 0.08 * S - end * v * flapLength
+                        );
+                    }, netColumns, Math.max(4, Math.ceil(flapLength / netPitch)));
+
+                    [-1, 1].forEach(side => {
+                        addDrapedNet((u, v) => {
+                            const drape = Math.sin(u * Math.PI) * 0.07 * S;
+                            return new THREE.Vector3(
+                                side * (halfNetWidth + drape),
+                                bottomY + v * bundleHeight,
+                                endZ + end * (0.08 * S + (1 - v) * 0.12 * S) - end * u * flapLength
+                            );
+                        }, Math.max(4, Math.ceil(flapLength / netPitch)), netRows);
+
+                        const anchor = new THREE.Vector3(
+                            side * (tr.w * S / 2 - 0.12 * S),
+                            deckHeight + 0.06 * S,
+                            endZ - end * Math.min(1.45 * S, length * 0.2)
+                        );
+                        const tiePoints = [
+                            new THREE.Vector3(side * halfNetWidth, bottomY + bundleHeight * 0.62, endZ + end * 0.12 * S),
+                            new THREE.Vector3(side * (halfNetWidth + 0.09 * S), bottomY + bundleHeight * 0.3, endZ + end * 0.08 * S),
+                            anchor
+                        ];
+                        const tieCurve = new THREE.CatmullRomCurve3(tiePoints);
+                        const tie = mesh(
+                            new THREE.TubeGeometry(tieCurve, 16, 0.018 * S, 6, false),
+                            strapMaterial,
+                            0,
+                            0,
+                            0,
+                            loadGroup
+                        );
+                        tie.castShadow = true;
+                    });
+                });
+
+                const netRopeGeometry = new THREE.CylinderGeometry(
+                    netRopeRadius,
+                    netRopeRadius,
+                    1,
+                    6
+                );
+                const netRopes = new THREE.InstancedMesh(netRopeGeometry, netMaterial, netSegments.length);
+                const netRopeTransform = new THREE.Object3D();
+                const up = new THREE.Vector3(0, 1, 0);
+                netSegments.forEach(([start, end], index) => {
+                    const direction = end.clone().sub(start);
+                    netRopeTransform.position.copy(start).add(end).multiplyScalar(0.5);
+                    netRopeTransform.quaternion.setFromUnitVectors(up, direction.clone().normalize());
+                    netRopeTransform.scale.set(1, direction.length(), 1);
+                    netRopeTransform.updateMatrix();
+                    netRopes.setMatrixAt(index, netRopeTransform.matrix);
+                });
+                netRopes.instanceMatrix.needsUpdate = true;
+                netRopes.castShadow = true;
+                netRopes.receiveShadow = true;
+                loadGroup.add(netRopes);
+            }
+        }
+    }
     
     // Ajusta a Câmera
     const cameraTransitionLength = tr.tipo === 'reta' ? 0 : (tr.transicao ?? 1.0);
@@ -2321,8 +2863,154 @@ function draw3D(tr, pos, isCarreta) {
 }
 
 function draw2D(tr, pos, isCarreta) {
+    if (activeCargaTab === 'tubos') {
+        drawTubeSide2D(ctxSide, els.sideCanvas, tr, pos, isCarreta);
+        drawTubeRear2D(ctxRear, els.rearCanvas, tr, pos, isCarreta);
+        return;
+    }
     drawSide2D(ctxSide, els.sideCanvas, tr, pos, isCarreta);
     drawRear2D(ctxRear, els.rearCanvas, tr, pos, isCarreta);
+}
+
+function drawTubeSide2D(ctx, canvas, tr, pos, isCarreta) {
+    const rect = canvas.parentElement.getBoundingClientRect();
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const tube = getTubeMetrics(tr);
+    const deckHeight = tr.tipo === 'reta' || (!isCarreta && pos === 'pescoco') ? 1.6 : tr.h;
+    const scale = Math.min(
+        (canvas.width - 40) / Math.max(tr.mesa, tube.tubeLengthM, 1),
+        (canvas.height - 30) / Math.max(deckHeight + tube.stackHeightMm / 1000 + 0.6, 2)
+    );
+    const deckX = 20;
+    const deckWidth = tr.mesa * scale;
+    const groundY = canvas.height - 16;
+    const deckY = groundY - deckHeight * scale;
+    const loadWidth = tube.tubeLengthM * scale;
+    const loadX = deckX + (deckWidth - loadWidth) / 2;
+
+    ctx.fillStyle = '#475569';
+    ctx.fillRect(deckX, deckY, deckWidth, Math.max(4, 0.16 * scale));
+    ctx.fillStyle = '#1e293b';
+    for (let axle = 0; axle < tr.eixos; axle++) {
+        const x = deckX + (1 + axle * (tr.tipo === 'vanderleia' ? 2.4 : 1.2)) * scale;
+        ctx.beginPath();
+        ctx.arc(Math.min(deckX + deckWidth - 8, x), groundY - 5, Math.max(4, 0.34 * scale), 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    if (tube.loaded > 0) {
+        const diameter = tube.diameterMm / 1000 * scale;
+        tube.loadedLayerCounts.forEach((count, layer) => {
+            if (count === 0) return;
+            const y = deckY - (tube.firstSleeperMm / 1000 + tube.diameterMm / 1000 +
+                layer * (tube.diameterMm + tube.layerSleeperMm) / 1000) * scale;
+            const gradient = ctx.createLinearGradient(0, y, 0, y + diameter);
+            gradient.addColorStop(0, '#d7e0e7');
+            gradient.addColorStop(0.45, '#778895');
+            gradient.addColorStop(1, '#34434f');
+            ctx.fillStyle = gradient;
+            ctx.strokeStyle = '#26323b';
+            const pipeHeight = Math.max(2, diameter);
+            const radius = Math.min(pipeHeight / 2, 8);
+            ctx.beginPath();
+            ctx.roundRect(loadX, y, loadWidth, pipeHeight, radius);
+            ctx.fill();
+            ctx.stroke();
+        });
+
+        ctx.fillStyle = '#80552f';
+        for (let support = 0; support < 3; support++) {
+            const x = loadX + loadWidth * (0.15 + support * 0.35);
+            ctx.fillRect(x - 2, deckY - tube.firstSleeperMm / 1000 * scale, 4,
+                Math.max(2, tube.firstSleeperMm / 1000 * scale));
+        }
+        ctx.fillStyle = '#1e293b';
+        ctx.font = 'bold 10px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(`${tube.loaded} tubo(s) · ${tube.tubeLengthM.toFixed(2)} m`, loadX + loadWidth / 2,
+            Math.max(12, deckY - (tube.stackHeightMm / 1000) * scale - 8));
+    }
+
+    ctx.setLineDash([5, 5]);
+    ctx.strokeStyle = '#ef4444';
+    ctx.beginPath();
+    ctx.moveTo(0, groundY - (4.4 - deckHeight) * scale);
+    ctx.lineTo(canvas.width, groundY - (4.4 - deckHeight) * scale);
+    ctx.stroke();
+    ctx.setLineDash([]);
+}
+
+function drawTubeRear2D(ctx, canvas, tr, pos, isCarreta) {
+    const rect = canvas.parentElement.getBoundingClientRect();
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const tube = getTubeMetrics(tr);
+    const deckHeight = tr.tipo === 'reta' || (!isCarreta && pos === 'pescoco') ? 1.6 : tr.h;
+    const maxWidth = Math.max(tr.w, tube.widthMm / 1000);
+    const maxHeight = Math.max(2, tube.heightMm / 1000 + 0.4);
+    const scale = Math.min((canvas.width - 36) / maxWidth, (canvas.height - 28) / maxHeight);
+    const centerX = canvas.width / 2;
+    const groundY = canvas.height - 14;
+    const trailerWidth = tr.w * scale;
+    const deckY = groundY - 0.28 * scale;
+    const boardHeight = Math.max(2, tube.firstSleeperMm / 1000 * scale);
+
+    ctx.fillStyle = '#475569';
+    ctx.fillRect(centerX - trailerWidth / 2, deckY, trailerWidth, Math.max(4, 0.16 * scale));
+    ctx.fillStyle = '#80552f';
+    ctx.fillRect(centerX - Math.min(trailerWidth, tube.widthOccupiedMm * scale / 1000) / 2,
+        deckY - boardHeight, Math.min(trailerWidth, tube.widthOccupiedMm * scale / 1000), boardHeight);
+
+    const legalHeight = Math.min(tube.heightMm / 1000, 4.4 - deckHeight);
+    ctx.setLineDash([5, 4]);
+    ctx.strokeStyle = '#ef4444';
+    ctx.beginPath();
+    ctx.moveTo(8, deckY - legalHeight * scale);
+    ctx.lineTo(canvas.width - 8, deckY - legalHeight * scale);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    if (tube.loaded > 0 && tube.diameterMm > 0) {
+        const pipeRadius = tube.diameterMm / 2000 * scale;
+        const positions = getTubePositions(tube, Math.min(tube.loaded, 500));
+        positions.forEach(position => {
+            const x = centerX + position.xMm / 1000 * scale;
+            const y = deckY - (tube.firstSleeperMm / 1000 + tube.diameterMm / 2000 +
+                position.layer * (tube.diameterMm + tube.layerSleeperMm) / 1000) * scale;
+            const gradient = ctx.createLinearGradient(x - pipeRadius, y - pipeRadius, x + pipeRadius, y + pipeRadius);
+            gradient.addColorStop(0, '#e2e8f0');
+            gradient.addColorStop(0.55, '#8b9aa6');
+            gradient.addColorStop(1, '#43515c');
+            ctx.beginPath();
+            ctx.arc(x, y, Math.max(1.5, pipeRadius), 0, Math.PI * 2);
+            ctx.fillStyle = gradient;
+            ctx.fill();
+            ctx.strokeStyle = '#334155';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+        });
+
+        for (let layer = 1; layer < tube.loadedLayers; layer++) {
+            const y = deckY - (tube.firstSleeperMm / 1000 + layer * tube.diameterMm / 1000 +
+                (layer - 1) * tube.layerSleeperMm / 1000) * scale;
+            ctx.fillStyle = '#80552f';
+            ctx.fillRect(centerX - Math.min(trailerWidth, tube.widthOccupiedMm * scale / 1000) / 2,
+                y - Math.max(2, tube.layerSleeperMm / 1000 * scale) / 2,
+                Math.min(trailerWidth, tube.widthOccupiedMm * scale / 1000),
+                Math.max(2, tube.layerSleeperMm / 1000 * scale));
+        }
+        if (tube.loaded > positions.length) {
+            ctx.fillStyle = '#475569';
+            ctx.font = '10px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(`Vista parcial: ${positions.length} de ${tube.loaded} tubos`, centerX, canvas.height - 2);
+        }
+    }
 }
 
 function drawCargoRect(ctx, x, y, w, h, carga) {
@@ -2559,6 +3247,75 @@ els.btnReset.addEventListener('click', () => {
     renderListaCargas();
     inputs.placa_carreta.value = ""; inputs.placa_prancha.value = "prancha_reb_6_3";
     updateTrailerInfo();
+});
+
+function setCargaTab(tab) {
+    const isTubes = tab === 'tubos';
+    if (isTubes && !TUBE_TRAILER_IDS.has(getActiveTrailerId())) {
+        cargoTrailerSelectionBeforeTubes = {
+            prancha: inputs.placa_prancha.value,
+            carreta: inputs.placa_carreta.value
+        };
+        inputs.placa_prancha.value = "";
+        inputs.placa_carreta.value = "carreta_padrao";
+    } else if (!isTubes && cargoTrailerSelectionBeforeTubes) {
+        inputs.placa_prancha.value = cargoTrailerSelectionBeforeTubes.prancha;
+        inputs.placa_carreta.value = cargoTrailerSelectionBeforeTubes.carreta;
+        cargoTrailerSelectionBeforeTubes = null;
+    }
+    activeCargaTab = tab;
+    const tabCargas = document.getElementById('tab_cargas');
+    const tabTubos = document.getElementById('tab_tubos');
+    const panelCargas = document.getElementById('panel_cargas');
+    const panelTubos = document.getElementById('panel_tubos');
+    const tabClass = 'load-tab load-tab-active';
+    const inactiveClass = 'load-tab';
+
+    tabCargas.className = isTubes ? inactiveClass : tabClass;
+    tabTubos.className = isTubes ? tabClass : inactiveClass;
+    tabCargas.setAttribute('aria-selected', String(!isTubes));
+    tabTubos.setAttribute('aria-selected', String(isTubes));
+    panelCargas.classList.toggle('hidden', isTubes);
+    panelTubos.classList.toggle('hidden', !isTubes);
+    document.getElementById('view_3d_title').textContent = isTubes
+        ? 'Tubos sobre a carroceria (3D)'
+        : 'Vista 3D (Arraste e Role)';
+    document.getElementById('view_side_title').textContent = isTubes
+        ? 'Perfil lateral dos tubos'
+        : 'Perfil Lateral';
+    document.getElementById('view_rear_title').textContent = isTubes
+        ? 'Vista frontal (seção)'
+        : 'Corte Traseiro (Largura)';
+    updateTrailerInfo();
+}
+
+document.getElementById('tab_cargas').addEventListener('click', () => setCargaTab('cargas'));
+document.getElementById('tab_tubos').addEventListener('click', () => setCargaTab('tubos'));
+document.getElementById('tube_strapping_on').addEventListener('click', () => {
+    tubeStrappingEnabled = true;
+    document.getElementById('tube_strapping_on').className = 'load-tab load-tab-active';
+    document.getElementById('tube_strapping_off').className = 'load-tab';
+    document.getElementById('tube_strapping_on').setAttribute('aria-pressed', 'true');
+    document.getElementById('tube_strapping_off').setAttribute('aria-pressed', 'false');
+    analyzeAndDraw();
+});
+document.getElementById('tube_strapping_off').addEventListener('click', () => {
+    tubeStrappingEnabled = false;
+    document.getElementById('tube_strapping_on').className = 'load-tab';
+    document.getElementById('tube_strapping_off').className = 'load-tab load-tab-active';
+    document.getElementById('tube_strapping_on').setAttribute('aria-pressed', 'false');
+    document.getElementById('tube_strapping_off').setAttribute('aria-pressed', 'true');
+    analyzeAndDraw();
+});
+Object.values(tubeInputs).forEach(input => {
+    input.addEventListener('input', () => {
+        window.clearTimeout(tubeInputUpdateTimer);
+        tubeInputUpdateTimer = window.setTimeout(analyzeAndDraw, 150);
+    });
+    input.addEventListener('change', () => {
+        window.clearTimeout(tubeInputUpdateTimer);
+        analyzeAndDraw();
+    });
 });
 
 window.addEventListener('load', () => {

@@ -12,3 +12,7 @@ O workflow **Publish PWA and build Android APK** publica a versão web no GitHub
 O APK precisa de conexão à internet para abrir o site e receber as atualizações. Ações que alterem o código nativo ou os metadados do aplicativo ainda exigem gerar e distribuir um APK novo. O pacote Android não inclui os modelos 3D; eles são carregados pelo site publicado.
 
 O PWA mantém os arquivos principais e as bibliotecas do Three.js em cache depois de carregados online. Os modelos 3D são grandes e não são armazenados pelo service worker; eles precisam ser baixados quando usados.
+
+## Planejamento de cargas e tubos
+
+Na área de cargas, as abas **Cargas** e **Tubos** mantêm os planejamentos separados. Tubos são planejados somente para carretas de 14 m ou 15 m; o comprimento é definido automaticamente como 13 m ou 14 m, respectivamente. O cálculo usa o diâmetro externo efetivo, a largura útil e a altura informadas para estimar tubos por camada, camadas, capacidade, peso e viagens. A aba também mostra o arranjo na carroceria em 3D e o corte frontal, com opção para ilustrar quatro cintas e redes drapeadas e presas nas duas pontas; revise as dimensões, os dormentes e a amarração antes do transporte.

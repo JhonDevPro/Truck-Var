@@ -73,6 +73,7 @@
                         <option value="carreta_vand">Carreta Vanderléia (14m)</option>
                         <option value="carreta_sider">Carreta Sider (14m)</option>
                     </select>
+                    <p id="tube_trailer_rule" class="hidden mt-2 text-[10px] font-semibold text-amber-900">Para tubos, use somente carretas de 14 m ou 15 m. O comprimento dos tubos é ajustado automaticamente para não encostar nas tampas.</p>
                 </div>
 
                 <!-- Info da Carreta/Prancha (Somente Leitura) -->
@@ -120,6 +121,12 @@
                     </div>
                 </div>
 
+                <div class="grid grid-cols-2 gap-1 rounded-lg bg-slate-100 p-1" role="tablist" aria-label="Tipo de carga">
+                    <button id="tab_cargas" type="button" role="tab" aria-selected="true" aria-controls="panel_cargas" class="load-tab load-tab-active">Cargas</button>
+                    <button id="tab_tubos" type="button" role="tab" aria-selected="false" aria-controls="panel_tubos" class="load-tab">Tubos</button>
+                </div>
+
+                <div id="panel_cargas" role="tabpanel" aria-labelledby="tab_cargas" class="space-y-4">
                 <!-- NOVA ÁREA DE COMPOSIÇÃO DE CARGA -->
                 <div class="bg-indigo-50 border border-indigo-200 p-3 rounded-md mb-2">
                     <h3 class="text-xs font-bold text-indigo-800 uppercase tracking-wide mb-2">Adicionar Item à Composição</h3>
@@ -186,6 +193,106 @@
                 <button id="btn_reset" class="w-full mt-4 bg-white border border-red-300 text-red-600 hover:bg-red-50 font-semibold py-2 px-4 rounded-md text-sm transition-colors">
                     Limpar Toda a Carga
                 </button>
+                </div>
+
+                <div id="panel_tubos" role="tabpanel" aria-labelledby="tab_tubos" class="hidden space-y-4">
+                    <section class="rounded-md border border-blue-200 bg-blue-50 p-3">
+                        <h3 class="mb-3 text-xs font-bold uppercase tracking-wide text-blue-900">Parâmetros dos tubos</h3>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label for="tube_diameter" class="mb-1 block text-[10px] font-semibold text-slate-600">Diâmetro do tubo</label>
+                                <input id="tube_diameter" type="number" value="10" min="0.1" step="0.1" class="tube-input">
+                            </div>
+                            <div>
+                                <label for="tube_unit" class="mb-1 block text-[10px] font-semibold text-slate-600">Unidade</label>
+                                <select id="tube_unit" class="tube-input">
+                                    <option value="in">Polegadas</option>
+                                    <option value="mm">Milímetros</option>
+                                </select>
+                            </div>
+                            <div class="col-span-2">
+                                <label for="tube_outer_diameter" class="mb-1 block text-[10px] font-semibold text-slate-600">Diâmetro externo real (mm, opcional)</label>
+                                <input id="tube_outer_diameter" type="number" value="0" min="0" step="0.1" class="tube-input">
+                            </div>
+                            <div>
+                                <label for="tube_width" class="mb-1 block text-[10px] font-semibold text-slate-600">Largura útil (mm)</label>
+                                <input id="tube_width" type="number" value="3000" min="1" step="10" class="tube-input">
+                            </div>
+                            <div>
+                                <label for="tube_height" class="mb-1 block text-[10px] font-semibold text-slate-600">Altura até o fueiro (mm)</label>
+                                <input id="tube_height" type="number" value="1500" min="1" step="10" class="tube-input">
+                            </div>
+                            <div>
+                                <label for="tube_length" class="mb-1 block text-[10px] font-semibold text-slate-600">Comprimento do tubo (m)</label>
+                                <input id="tube_length" type="number" value="13" class="tube-input bg-slate-100" readonly>
+                            </div>
+                            <div>
+                                <label for="tube_first_sleeper" class="mb-1 block text-[10px] font-semibold text-slate-600">1º dormente (mm)</label>
+                                <select id="tube_first_sleeper" class="tube-input">
+                                    <option value="100">100 mm</option>
+                                    <option value="150" selected>150 mm</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="tube_layer_sleeper" class="mb-1 block text-[10px] font-semibold text-slate-600">Dormentes entre camadas</label>
+                                <select id="tube_layer_sleeper" class="tube-input">
+                                    <option value="100">100 mm</option>
+                                    <option value="150" selected>150 mm</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="tube_weight" class="mb-1 block text-[10px] font-semibold text-slate-600">Peso por tubo (kg)</label>
+                                <input id="tube_weight" type="number" value="" min="0" step="1" placeholder="Opcional" class="tube-input">
+                            </div>
+                            <div>
+                                <label for="tube_trailer_capacity" class="mb-1 block text-[10px] font-semibold text-slate-600">Capacidade da carreta (t)</label>
+                                <input id="tube_trailer_capacity" type="number" value="45" min="0" step="0.5" class="tube-input">
+                            </div>
+                            <div class="col-span-2">
+                                <label for="tube_arrangement" class="mb-1 block text-[10px] font-semibold text-slate-600">Arranjo dos tubos</label>
+                                <select id="tube_arrangement" class="tube-input">
+                                    <option value="retangular">Retangular (com dormentes entre camadas)</option>
+                                    <option value="piramidal">Piramidal (cada camada com um tubo a menos)</option>
+                                </select>
+                            </div>
+                            <div class="col-span-2">
+                                <span class="mb-1 block text-[10px] font-semibold text-slate-600">Amarração ilustrada</span>
+                                <div class="grid grid-cols-2 gap-1 rounded-lg bg-slate-100 p-1" role="group" aria-label="Amarração dos tubos">
+                                    <button id="tube_strapping_on" type="button" aria-pressed="true" class="load-tab load-tab-active">Com amarração</button>
+                                    <button id="tube_strapping_off" type="button" aria-pressed="false" class="load-tab">Sem amarração</button>
+                                </div>
+                            </div>
+                            <div>
+                                <label for="tube_per_row" class="mb-1 block text-[10px] font-semibold text-slate-600">Tubos por fileira (opcional)</label>
+                                <input id="tube_per_row" type="number" value="" min="1" step="1" placeholder="Automático" class="tube-input">
+                            </div>
+                            <div>
+                                <label for="tube_per_truck" class="mb-1 block text-[10px] font-semibold text-slate-600">Tubos que vou carregar por carreta (opcional)</label>
+                                <input id="tube_per_truck" type="number" value="" min="1" step="1" placeholder="Carga máxima" class="tube-input">
+                            </div>
+                            <div class="col-span-2">
+                                <label for="tube_total" class="mb-1 block text-[10px] font-semibold text-slate-600">Total de tubos a transportar (opcional)</label>
+                                <input id="tube_total" type="number" value="" min="1" step="1" placeholder="Informe para estimar as viagens" class="tube-input">
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="rounded-md border border-slate-200 bg-white p-3">
+                        <h3 class="mb-2 text-xs font-bold uppercase tracking-wide text-slate-700">Estimativa por carreta</h3>
+                        <dl class="grid grid-cols-2 gap-x-3 gap-y-2 text-[11px]">
+                            <div><dt class="text-slate-500">Diâmetro efetivo</dt><dd id="tube_result_diameter" class="font-bold text-slate-800">—</dd></div>
+                            <div><dt class="text-slate-500">Tubos por camada</dt><dd id="tube_result_row" class="font-bold text-slate-800">—</dd></div>
+                            <div><dt class="text-slate-500">Camadas possíveis</dt><dd id="tube_result_layers" class="font-bold text-slate-800">—</dd></div>
+                            <div><dt class="text-slate-500">Capacidade geométrica</dt><dd id="tube_result_capacity" class="font-bold text-slate-800">—</dd></div>
+                            <div><dt class="text-slate-500">Carregados por carreta</dt><dd id="tube_result_loaded" class="font-bold text-slate-800">—</dd></div>
+                            <div><dt class="text-slate-500">Altura da pilha</dt><dd id="tube_result_height" class="font-bold text-slate-800">—</dd></div>
+                            <div><dt class="text-slate-500">Peso estimado</dt><dd id="tube_result_weight" class="font-bold text-slate-800">—</dd></div>
+                            <div><dt class="text-slate-500">Viagens estimadas</dt><dd id="tube_result_trips" class="font-bold text-slate-800">—</dd></div>
+                        </dl>
+                        <p id="tube_result_warning" class="mt-3 hidden rounded border border-amber-200 bg-amber-50 p-2 text-[10px] font-semibold text-amber-800"></p>
+                        <p class="mt-3 text-[10px] leading-relaxed text-slate-500">Estimativa geométrica. Confirme dimensões, distribuição de peso, dormentes, estabilidade e amarração antes do transporte.</p>
+                    </section>
+                </div>
             </div>
         </div>
 
@@ -195,7 +302,7 @@
             <!-- Bloco 3D -->
             <div class="panel-card flex-grow">
                 <div class="p-2 border-b border-slate-100 flex justify-between items-center bg-slate-50 rounded-t-xl">
-                    <h3 class="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-2">Vista 3D (Arraste e Role)</h3>
+                    <h3 id="view_3d_title" class="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-2">Vista 3D (Arraste e Role)</h3>
                     <div class="flex gap-2">
                         <span class="px-2 py-1 bg-blue-100 text-blue-800 text-[10px] font-bold rounded" id="tag_tipo_prancha">Veículo</span>
                     </div>
@@ -215,7 +322,7 @@
                 <!-- Lateral -->
                 <div class="panel-card">
                     <div class="p-2 border-b border-slate-100 bg-slate-50 rounded-t-xl text-center">
-                        <h3 class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Perfil Lateral</h3>
+                        <h3 id="view_side_title" class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Perfil Lateral</h3>
                     </div>
                     <div class="w-full bg-white relative h-2d-view flex items-center justify-center overflow-hidden p-2">
                         <canvas id="sideCanvas" class="w-full h-full block"></canvas>
@@ -224,7 +331,7 @@
                 <!-- Frontal / Traseira -->
                 <div class="panel-card">
                     <div class="p-2 border-b border-slate-100 bg-slate-50 rounded-t-xl text-center">
-                        <h3 class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Corte Traseiro (Largura)</h3>
+                        <h3 id="view_rear_title" class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Corte Traseiro (Largura)</h3>
                     </div>
                     <div class="w-full bg-white relative h-2d-view flex items-center justify-center overflow-hidden p-2">
                         <canvas id="rearCanvas" class="w-full h-full block"></canvas>
