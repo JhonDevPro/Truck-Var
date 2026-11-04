@@ -11,7 +11,7 @@ O workflow **Publish PWA and build Android APK** publica a versão web no GitHub
 
 O APK precisa de conexão à internet para abrir o site e receber as atualizações. Ações que alterem o código nativo ou os metadados do aplicativo ainda exigem gerar e distribuir um APK novo. O pacote Android não inclui os modelos 3D; eles são carregados pelo site publicado.
 
-O PWA mantém os arquivos principais, as bibliotecas do Three.js e os modelos 3D compactados da Scania e do chassi da carreta em cache depois do primeiro carregamento online. Os modelos completos ainda podem levar algum tempo para baixar na primeira visita; enquanto isso, uma prévia leve do cavalinho e um chassi simplificado aparecem imediatamente.
+O PWA mantém os arquivos principais, as bibliotecas do Three.js e os modelos 3D otimizados da Scania e do chassi da carreta em cache após o primeiro carregamento online. Esses dois modelos são carregados em paralelo ao abrir o aplicativo para já estarem prontos ao selecionar uma carreta.
 
 ## Planejamento de cargas e tubos
 

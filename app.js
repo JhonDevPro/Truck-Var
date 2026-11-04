@@ -379,6 +379,9 @@ function loadCabModel(modelId) {
                 loader.load(model.url, gltf => resolve(gltf.scene), undefined, reject);
             });
         cabModelPromises.set(modelId, promise);
+        promise.catch(() => {
+            if (cabModelPromises.get(modelId) === promise) cabModelPromises.delete(modelId);
+        });
     }
     return cabModelPromises.get(modelId);
 }
@@ -415,10 +418,15 @@ function loadCompressedTrailerModel(compressedUrl, uncompressedUrl) {
 
 function loadTrailerChassis() {
     if (!trailerChassisPromise) {
-        trailerChassisPromise = loadCompressedTrailerModel(
+        const loadPromise = loadCompressedTrailerModel(
             './chassi-para-carreta-14-15.glb.gz',
             './chassi-para-carreta-14-15.glb'
         );
+        const promise = loadPromise.catch(error => {
+            if (trailerChassisPromise === promise) trailerChassisPromise = undefined;
+            throw error;
+        });
+        trailerChassisPromise = promise;
     }
     return trailerChassisPromise;
 }
@@ -1669,31 +1677,6 @@ function draw3D(tr, pos, isCarreta) {
     const usesChassisModel = ['carreta_ext', 'carreta', 'sider', 'carreta_bau', 'vanderleia'].includes(tr.tipo);
 
     function addChassisModel() {
-        const axleLayout = getCarretaAxleLayout(tr);
-        const fallbackChassis = new THREE.Group();
-        const fallbackMaterial = mat(0x26323b, 0.62, 0.52);
-        trailerGroup.add(fallbackChassis);
-
-        [-1, 1].forEach(side => {
-            box(0.16*S, 0.3*S, mL*0.82, fallbackMaterial,
-                side*wT*0.34, deckY-0.42*S, shiftZ-mL/2, fallbackChassis);
-        });
-        for (let crossmember = 0; crossmember < 7; crossmember++) {
-            const z = shiftZ-mL*0.38+crossmember*mL*0.76/6;
-            box(wT*0.72, 0.12*S, 0.14*S, fallbackMaterial,
-                0, deckY-0.36*S, z, fallbackChassis);
-        }
-        if (tr.tipo !== 'vanderleia') {
-            for (let axle = 0; axle < tr.eixos; axle++) {
-                const z = shiftZ-mL+axleLayout.firstFromRear+axle*axleLayout.spacing;
-                [-1, 1].forEach(side => {
-                    const x = side*(wT/2-0.35*S);
-                    wheel(x-side*0.15*S, 0.49*S, z, 0.48*S, 0.28*S, fallbackChassis, false);
-                    wheel(x+side*0.15*S, 0.49*S, z, 0.48*S, 0.28*S, fallbackChassis, false);
-                });
-            }
-        }
-
         const loadChassis = () => loadTrailerChassis().then(source => {
             if (drawRevision !== draw3DRevision) return;
 
@@ -1752,60 +1735,15 @@ function draw3D(tr, pos, isCarreta) {
                 node.material = Array.isArray(node.material) ? updatedMaterials : updatedMaterials[0];
             });
 
-            if (drawRevision === draw3DRevision) {
-                trailerGroup.remove(fallbackChassis);
-                fallbackChassis.traverse(node => {
-                    if (node.geometry) node.geometry.dispose();
-                });
-                trailerGroup.add(chassis);
-            }
+            if (drawRevision === draw3DRevision) trailerGroup.add(chassis);
         }).catch(error => console.error('Erro ao carregar o chassi da carreta:', error));
 
-        if (typeof window.requestIdleCallback === 'function') {
-            window.requestIdleCallback(loadChassis, { timeout: 1200 });
-        } else {
-            window.setTimeout(loadChassis, 200);
-        }
+        loadChassis();
     }
 
     const cabModelId = inputs.cavalinho.value || 'semi_obj';
-    let cabFallbackObject = null;
-    let cabModelLoaded = false;
-    if (cabModelId === 'scania_s_730') {
-        loadCabModel('tractor_cab_burnout_3').then(source => {
-            if (drawRevision !== draw3DRevision || cabModelLoaded) return;
-
-            cabFallbackObject = source.clone(true);
-            cabFallbackObject.updateMatrixWorld(true);
-            const bounds = new THREE.Box3().setFromObject(cabFallbackObject);
-            const size = bounds.getSize(new THREE.Vector3());
-            const center = bounds.getCenter(new THREE.Vector3());
-            const scaleX = CAB_REFERENCE_SIZE[0] / size.x;
-            const scaleY = CAB_REFERENCE_SIZE[1] / size.y;
-            const scaleZ = CAB_REFERENCE_SIZE[2] / size.z;
-            cabFallbackObject.scale.set(scaleX, scaleY, scaleZ);
-            cabFallbackObject.position.set(
-                CAB_REFERENCE_CENTER[0] - center.x * scaleX,
-                -bounds.min.y * scaleY,
-                CAB_REFERENCE_CENTER[2] - center.z * scaleZ
-            );
-            cabFallbackObject.traverse(node => {
-                if (!node.isMesh) return;
-                node.castShadow = false;
-                node.receiveShadow = false;
-            });
-            trailerGroup.add(cabFallbackObject);
-            frameVehicleView();
-        }).catch(error => console.warn('Não foi possível carregar a prévia leve do cavalinho.', error));
-    }
-
     loadCabModel(cabModelId).then(source => {
         if (drawRevision !== draw3DRevision) return;
-        cabModelLoaded = true;
-        if (cabFallbackObject) {
-            trailerGroup.remove(cabFallbackObject);
-            cabFallbackObject = null;
-        }
 
         const object = source.clone(true);
         
@@ -3630,6 +3568,13 @@ Object.values(tubeInputs).forEach(input => {
         window.clearTimeout(tubeInputUpdateTimer);
         analyzeAndDraw();
     });
+});
+
+loadCabModel('scania_s_730').catch(error => {
+    console.error('Erro ao pré-carregar o cavalinho Scania:', error);
+});
+loadTrailerChassis().catch(error => {
+    console.error('Erro ao pré-carregar o chassi da carreta:', error);
 });
 
 window.addEventListener('load', () => {
