@@ -1,4 +1,4 @@
-const CACHE_NAME = 'felka-cargas-v5';
+const CACHE_NAME = 'felka-cargas-v6';
 const APP_SHELL = [
     './',
     './index.html',
@@ -36,7 +36,25 @@ self.addEventListener('fetch', event => {
     const url = new URL(request.url);
     const sameOrigin = url.origin === self.location.origin;
     const isLargeModel = /\.(glb|gltf|obj|mtl)(\.gz)?$/i.test(url.pathname);
+    const isCompressedModel = /\.glb\.gz$/i.test(url.pathname);
     const isLargeTexture = /\.(png|jpe?g)$/i.test(url.pathname) && !url.pathname.includes('/icons/');
+
+    if (sameOrigin && isCompressedModel) {
+        event.respondWith((async () => {
+            const cache = await caches.open(CACHE_NAME);
+            const cached = await cache.match(request);
+            if (cached) return cached;
+
+            const response = await fetch(request);
+            if (response.ok) {
+                await cache.put(request, response.clone()).catch(error => {
+                    console.warn('Não foi possível guardar o modelo comprimido em cache.', error);
+                });
+            }
+            return response;
+        })());
+        return;
+    }
 
     if (sameOrigin && (isLargeModel || isLargeTexture)) return;
 

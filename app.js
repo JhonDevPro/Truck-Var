@@ -217,7 +217,14 @@ const LOAD_TYPES = [
     { value: 'gerador', label: 'Gerador', preset: [4.5, 2.6, 2.7, 8] },
     { value: 'cesta', label: 'Cesta offshore', preset: [4, 2.4, 2.5, 5] },
     { value: 'estrutura', label: 'Estrutura metálica', preset: [7, 3, 2.8, 9] }
-];
+].map(loadType => ({
+    ...loadType,
+    gap: loadType.value.startsWith('bobina_')
+        ? 0.50
+        : loadType.value.startsWith('container_')
+            ? 0.00
+            : 0.02
+}));
 
 const CONTAINER_LOAD_TYPES = new Set(LOAD_TYPES
     .filter(({ value }) => value.startsWith('container_'))
@@ -347,7 +354,6 @@ const ctxRear = els.rearCanvas.getContext('2d');
 
 let scene, camera, renderer, controls, trailerGroup, loadGroup;
 let currentTrailer = bdVeiculos["prancha_reb_6_3"];
-const GAP = 0.02; 
 let trailerChassisPromise;
 let draw3DRevision = 0;
 
@@ -366,37 +372,10 @@ function loadCabModel(modelId) {
                     objLoader.load('semi.obj', resolve, undefined, reject);
                 }, undefined, reject);
             })
-            : new Promise((resolve, reject) => {
+            : model.compression === 'gzip'
+                ? loadCompressedTrailerModel(model.url, './scania_S-730.glb')
+                : new Promise((resolve, reject) => {
                 const loader = new THREE.GLTFLoader();
-                if (model.compression === 'gzip') {
-                    const loadUncompressedModel = () => new Promise((resolve, reject) => {
-                        loader.load('./scania_S-730.glb', gltf => resolve(gltf.scene), undefined, reject);
-                    });
-                    if (window.location.protocol === 'file:') {
-                        loadUncompressedModel().then(resolve, reject);
-                        return;
-                    }
-                    fetch(model.url)
-                        .then(response => {
-                            if (!response.ok) {
-                                throw new Error(`Falha ao baixar o modelo comprimido (${response.status}).`);
-                            }
-                            if (typeof DecompressionStream !== 'function' || !response.body) {
-                                throw new Error('Este dispositivo não oferece suporte à descompressão do modelo.');
-                            }
-                            return new Response(
-                                response.body.pipeThrough(new DecompressionStream('gzip'))
-                            ).arrayBuffer().then(data => new Promise((resolve, reject) => {
-                                loader.parse(data, './', gltf => resolve(gltf.scene), reject);
-                            }));
-                        })
-                        .catch(error => {
-                            console.warn('Falha ao carregar o modelo Scania comprimido; tentando a versão original.', error);
-                            return loadUncompressedModel();
-                        })
-                        .then(resolve, reject);
-                    return;
-                }
                 loader.load(model.url, gltf => resolve(gltf.scene), undefined, reject);
             });
         cabModelPromises.set(modelId, promise);
@@ -404,12 +383,42 @@ function loadCabModel(modelId) {
     return cabModelPromises.get(modelId);
 }
 
+function loadCompressedTrailerModel(compressedUrl, uncompressedUrl) {
+    const loader = new THREE.GLTFLoader();
+    const loadUncompressed = () => new Promise((resolve, reject) => {
+        loader.load(uncompressedUrl, gltf => resolve(gltf.scene), undefined, reject);
+    });
+
+    if (window.location.protocol === 'file:' || typeof DecompressionStream !== 'function') {
+        return loadUncompressed();
+    }
+
+    return fetch(compressedUrl)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Falha ao baixar o modelo comprimido (${response.status}).`);
+            }
+            if (!response.body) {
+                throw new Error('A resposta do modelo comprimido não contém dados.');
+            }
+            return new Response(response.body.pipeThrough(new DecompressionStream('gzip')))
+                .arrayBuffer();
+        })
+        .then(data => new Promise((resolve, reject) => {
+            loader.parse(data, './', gltf => resolve(gltf.scene), reject);
+        }))
+        .catch(error => {
+            console.warn(`Falha ao carregar ${compressedUrl}; tentando o modelo original.`, error);
+            return loadUncompressed();
+        });
+}
+
 function loadTrailerChassis() {
     if (!trailerChassisPromise) {
-        const loader = new THREE.GLTFLoader();
-        trailerChassisPromise = new Promise((resolve, reject) => {
-            loader.load('./chassi-para-carreta-14-15.glb', gltf => resolve(gltf.scene), undefined, reject);
-        });
+        trailerChassisPromise = loadCompressedTrailerModel(
+            './chassi-para-carreta-14-15.glb.gz',
+            './chassi-para-carreta-14-15.glb'
+        );
     }
     return trailerChassisPromise;
 }
@@ -454,32 +463,78 @@ function getActiveTrailerId() {
     return "prancha_reb_6_3"; 
 }
 
+function setVehicleSelectorTab(tab) {
+    document.querySelectorAll('[data-vehicle-tab]').forEach(button => {
+        const isActive = button.dataset.vehicleTab === tab;
+        button.classList.toggle('vehicle-tab-active', isActive);
+        button.setAttribute('aria-selected', String(isActive));
+        button.tabIndex = isActive ? 0 : -1;
+    });
+
+    ['cavalinho', 'prancha', 'carreta'].forEach(panel => {
+        document.getElementById(`panel_${panel}`).classList.toggle('hidden', panel !== tab);
+    });
+}
+
+document.querySelectorAll('[data-vehicle-tab]').forEach(button => {
+    button.addEventListener('click', () => setVehicleSelectorTab(button.dataset.vehicleTab));
+});
+setVehicleSelectorTab('prancha');
+
 inputs.cavalinho.addEventListener('change', analyzeAndDraw);
 inputs.posicao.addEventListener('change', analyzeAndDraw);
 inputs.tampas.addEventListener('change', analyzeAndDraw);
 inputs.placa_prancha.addEventListener('change', () => {
-    if(inputs.placa_prancha.value) inputs.placa_carreta.value = "";
+    if(inputs.placa_prancha.value) {
+        inputs.placa_carreta.value = "";
+        setVehicleSelectorTab('prancha');
+    }
     updateTrailerInfo();
 });
 inputs.placa_carreta.addEventListener('change', () => {
-    if(inputs.placa_carreta.value) inputs.placa_prancha.value = "";
+    if(inputs.placa_carreta.value) {
+        inputs.placa_prancha.value = "";
+        setVehicleSelectorTab('carreta');
+    }
     updateTrailerInfo();
 });
 
 // Calcula o espaço que o grid de um bloco de cargas vai ocupar (fileiras e colunas)
-function getGridMetrics(tr, cComp, cLarg, cQtd, isCarreta) {
+function getLoadGap(type) {
+    return LOAD_TYPES.find(loadType => loadType.value === type)?.gap ?? 0.02;
+}
+
+function getCarretaAxleLayout(tr) {
+    return {
+        firstFromRear: tr.tipo === 'vanderleia' ? 1.2 : 1.5,
+        spacing: tr.tipo === 'vanderleia' ? 2.4 : 1.2
+    };
+}
+
+function getGridMetrics(tr, carga, isCarreta, cComp = carga.comp) {
+    const { larg: cLarg, qtd: cQtd, peso, type } = carga;
+    const standardGap = getLoadGap(type);
     const usesGates = isCarreta && inputs.tampas.value === 'com' && tr.tipo !== 'sider' && tr.tipo !== 'carreta_bau';
     const availableWidth = usesGates ? tr.w_util : tr.w;
-    
-    let maxCols = Math.floor((availableWidth + GAP) / (cLarg + GAP));
+    const isDistributed = isCarreta &&
+        peso * cQtd > tr.cap / 2 &&
+        cQtd > 1 &&
+        cQtd * cComp <= tr.mesa;
+    const gap = isDistributed
+        ? (tr.mesa - cQtd * cComp) / (cQtd - 1)
+        : standardGap;
+
+    let maxCols = isDistributed
+        ? 1
+        : Math.floor((availableWidth + gap) / (cLarg + gap));
     if (maxCols < 1) maxCols = 1; 
     
     const rows = Math.ceil(cQtd / maxCols);
-    const totalComp = rows * cComp + Math.max(0, rows - 1) * GAP;
+    const totalComp = rows * cComp + Math.max(0, rows - 1) * gap;
     const maxItemsInRow = Math.min(cQtd, maxCols);
-    const totalLarg = maxItemsInRow * cLarg + Math.max(0, maxItemsInRow - 1) * GAP;
+    const totalLarg = maxItemsInRow * cLarg + Math.max(0, maxItemsInRow - 1) * gap;
 
-    return { maxCols, rows, totalComp, totalLarg, availableWidth };
+    return { maxCols, rows, totalComp, totalLarg, availableWidth, gap, isDistributed };
 }
 
 function getTubeMetrics(tr) {
@@ -617,36 +672,128 @@ function getLoadSequenceMetrics(tr, isCarreta) {
             (carga.type === 'bobina_lado_2' || carga.type === 'bobina_frente_2');
         const clearance = getLoadStartClearance(carga.type);
         const coilLength = splitCoils ? carga.comp / 2 : carga.comp;
-        const grid = getGridMetrics(tr, coilLength, carga.larg, carga.qtd, isCarreta);
+        const grid = getGridMetrics(tr, carga, isCarreta, coilLength);
+        const isConcentrada = isCarreta &&
+            carga.qtd === 1 &&
+            carga.peso * carga.qtd > tr.cap / 2 &&
+            grid.totalComp + grid.gap < tr.mesa / 2;
+        return { carga, grid, clearance, splitCoils, coilLength, isConcentrada };
+    });
 
+    if (isCarreta) {
+        const distributedLoads = loads.filter(load => load.grid.isDistributed);
+        if (distributedLoads.length) {
+            distributedLoads.forEach(load => {
+                load.startOffset = 0;
+            });
+            let normalOffset = tr.mesa;
+            loads.filter(load => !load.grid.isDistributed).forEach(load => {
+                load.startOffset = normalOffset;
+                normalOffset += load.grid.totalComp + load.grid.gap;
+            });
+            const mesaComp = loads.reduce(
+                (maxEnd, load) => Math.max(maxEnd, load.startOffset + load.grid.totalComp),
+                0
+            );
+            return {
+                loads,
+                totalComp: mesaComp,
+                mesaComp,
+                pescocoComp: 0
+            };
+        }
+
+        const concentratedLoads = loads.filter(load => load.isConcentrada);
+        let concentratedEnd = 0;
+        let concentratedStart = 0;
+        let concentratedCursor = 0;
+        if (concentratedLoads.length) {
+            concentratedLoads.forEach((load, index) => {
+                if (index > 0) concentratedCursor += concentratedLoads[index - 1].grid.gap;
+                load.startOffset = concentratedCursor;
+                concentratedCursor += load.grid.totalComp;
+            });
+            const concentratedLength = concentratedCursor;
+            const axleLayout = getCarretaAxleLayout(tr);
+            const axleCenterFromRear = axleLayout.firstFromRear +
+                (Math.max(1, tr.eixos) - 1) * axleLayout.spacing / 2;
+            const axleCenterOffset = tr.mesa - axleCenterFromRear;
+            concentratedStart = Math.max(
+                0,
+                Math.min(tr.mesa - concentratedLength, axleCenterOffset - concentratedLength / 2)
+            );
+            concentratedLoads.forEach(load => {
+                load.startOffset += concentratedStart;
+            });
+            concentratedEnd = concentratedStart + concentratedLength;
+        }
+
+        let normalFrontOffset = 0;
+        let normalRearOffset = concentratedEnd;
+        let normalRearGap = concentratedLoads.length
+            ? concentratedLoads[concentratedLoads.length - 1].grid.gap
+            : 0;
+        let rearQueueStarted = false;
+        loads.filter(load => !load.isConcentrada).forEach(load => {
+            const candidateStartOffset = Math.max(normalFrontOffset, load.clearance);
+            const fitsBeforeConcentrated = !concentratedLoads.length ||
+                (candidateStartOffset + load.grid.totalComp + load.grid.gap <= concentratedStart);
+            if (!rearQueueStarted && fitsBeforeConcentrated) {
+                load.startOffset = candidateStartOffset;
+                normalFrontOffset = candidateStartOffset + load.grid.totalComp + load.grid.gap;
+                return;
+            }
+
+            rearQueueStarted = true;
+            load.startOffset = normalRearOffset + normalRearGap;
+            normalRearOffset = load.startOffset + load.grid.totalComp;
+            normalRearGap = load.grid.gap;
+        });
+
+        const mesaComp = loads.reduce(
+            (maxEnd, load) => Math.max(maxEnd, load.startOffset + load.grid.totalComp),
+            0
+        );
+        return { loads, totalComp: mesaComp, mesaComp, pescocoComp: 0 };
+    }
+
+    let mesaEnd = 0;
+    let pescocoEnd = 0;
+    loads.forEach(load => {
+        const { grid, clearance, splitCoils } = load;
+        const gap = grid.gap;
         if (splitCoils) {
             const mesaStartOffset = Math.max(mesaOffset, clearance);
             const pescocoStartOffset = Math.max(pescocoOffset, clearance);
-            mesaOffset = mesaStartOffset + grid.totalComp + GAP;
-            pescocoOffset = pescocoStartOffset + grid.totalComp + GAP;
-            return {
-                carga,
-                grid,
+            mesaOffset = mesaStartOffset + grid.totalComp + gap;
+            pescocoOffset = pescocoStartOffset + grid.totalComp + gap;
+            mesaEnd = Math.max(mesaEnd, mesaStartOffset + grid.totalComp);
+            pescocoEnd = Math.max(pescocoEnd, pescocoStartOffset + grid.totalComp);
+            Object.assign(load, {
                 startOffset: pos === 'pescoco' ? pescocoStartOffset : mesaStartOffset,
                 mesaStartOffset,
-                pescocoStartOffset,
-                splitCoils,
-                coilLength
-            };
+                pescocoStartOffset
+            });
+            return;
         }
 
         const inPescoco = !isCarreta && pos === 'pescoco';
         const startOffset = Math.max(inPescoco ? pescocoOffset : mesaOffset, clearance);
-        if (inPescoco) pescocoOffset = startOffset + grid.totalComp + GAP;
-        else mesaOffset = startOffset + grid.totalComp + GAP;
-        return { carga, grid, startOffset, splitCoils, coilLength };
+        if (inPescoco) {
+            pescocoOffset = startOffset + grid.totalComp + gap;
+            pescocoEnd = Math.max(pescocoEnd, startOffset + grid.totalComp);
+        } else {
+            mesaOffset = startOffset + grid.totalComp + gap;
+            mesaEnd = Math.max(mesaEnd, startOffset + grid.totalComp);
+        }
+        Object.assign(load, { startOffset });
     });
 
     return {
         loads,
-        totalComp: pos === 'pescoco' && !isCarreta ? pescocoOffset - (pescocoOffset ? GAP : 0) : mesaOffset - (mesaOffset ? GAP : 0),
-        mesaComp: mesaOffset ? mesaOffset - GAP : 0,
-        pescocoComp: pescocoOffset ? pescocoOffset - GAP : 0
+        totalComp: pos === 'pescoco' ? pescocoEnd : mesaEnd,
+        mesaComp: mesaEnd,
+        pescocoComp: pescocoEnd
     };
 }
 
@@ -761,6 +908,7 @@ function updateTrailerInfo() {
         inputs.placa_prancha.value = "";
         inputs.placa_carreta.value = "carreta_padrao";
     }
+    if (activeCargaTab === 'tubos') setVehicleSelectorTab('carreta');
 
     inputs.placa_prancha.disabled = activeCargaTab === 'tubos';
     document.getElementById('tube_trailer_rule').classList.toggle('hidden', activeCargaTab !== 'tubos');
@@ -1521,7 +1669,32 @@ function draw3D(tr, pos, isCarreta) {
     const usesChassisModel = ['carreta_ext', 'carreta', 'sider', 'carreta_bau', 'vanderleia'].includes(tr.tipo);
 
     function addChassisModel() {
-        loadTrailerChassis().then(source => {
+        const axleLayout = getCarretaAxleLayout(tr);
+        const fallbackChassis = new THREE.Group();
+        const fallbackMaterial = mat(0x26323b, 0.62, 0.52);
+        trailerGroup.add(fallbackChassis);
+
+        [-1, 1].forEach(side => {
+            box(0.16*S, 0.3*S, mL*0.82, fallbackMaterial,
+                side*wT*0.34, deckY-0.42*S, shiftZ-mL/2, fallbackChassis);
+        });
+        for (let crossmember = 0; crossmember < 7; crossmember++) {
+            const z = shiftZ-mL*0.38+crossmember*mL*0.76/6;
+            box(wT*0.72, 0.12*S, 0.14*S, fallbackMaterial,
+                0, deckY-0.36*S, z, fallbackChassis);
+        }
+        if (tr.tipo !== 'vanderleia') {
+            for (let axle = 0; axle < tr.eixos; axle++) {
+                const z = shiftZ-mL+axleLayout.firstFromRear+axle*axleLayout.spacing;
+                [-1, 1].forEach(side => {
+                    const x = side*(wT/2-0.35*S);
+                    wheel(x-side*0.15*S, 0.49*S, z, 0.48*S, 0.28*S, fallbackChassis, false);
+                    wheel(x+side*0.15*S, 0.49*S, z, 0.48*S, 0.28*S, fallbackChassis, false);
+                });
+            }
+        }
+
+        const loadChassis = () => loadTrailerChassis().then(source => {
             if (drawRevision !== draw3DRevision) return;
 
             const chassis = source.clone(true);
@@ -1579,13 +1752,60 @@ function draw3D(tr, pos, isCarreta) {
                 node.material = Array.isArray(node.material) ? updatedMaterials : updatedMaterials[0];
             });
 
-            if (drawRevision === draw3DRevision) trailerGroup.add(chassis);
+            if (drawRevision === draw3DRevision) {
+                trailerGroup.remove(fallbackChassis);
+                fallbackChassis.traverse(node => {
+                    if (node.geometry) node.geometry.dispose();
+                });
+                trailerGroup.add(chassis);
+            }
         }).catch(error => console.error('Erro ao carregar o chassi da carreta:', error));
+
+        if (typeof window.requestIdleCallback === 'function') {
+            window.requestIdleCallback(loadChassis, { timeout: 1200 });
+        } else {
+            window.setTimeout(loadChassis, 200);
+        }
     }
 
     const cabModelId = inputs.cavalinho.value || 'semi_obj';
+    let cabFallbackObject = null;
+    let cabModelLoaded = false;
+    if (cabModelId === 'scania_s_730') {
+        loadCabModel('tractor_cab_burnout_3').then(source => {
+            if (drawRevision !== draw3DRevision || cabModelLoaded) return;
+
+            cabFallbackObject = source.clone(true);
+            cabFallbackObject.updateMatrixWorld(true);
+            const bounds = new THREE.Box3().setFromObject(cabFallbackObject);
+            const size = bounds.getSize(new THREE.Vector3());
+            const center = bounds.getCenter(new THREE.Vector3());
+            const scaleX = CAB_REFERENCE_SIZE[0] / size.x;
+            const scaleY = CAB_REFERENCE_SIZE[1] / size.y;
+            const scaleZ = CAB_REFERENCE_SIZE[2] / size.z;
+            cabFallbackObject.scale.set(scaleX, scaleY, scaleZ);
+            cabFallbackObject.position.set(
+                CAB_REFERENCE_CENTER[0] - center.x * scaleX,
+                -bounds.min.y * scaleY,
+                CAB_REFERENCE_CENTER[2] - center.z * scaleZ
+            );
+            cabFallbackObject.traverse(node => {
+                if (!node.isMesh) return;
+                node.castShadow = false;
+                node.receiveShadow = false;
+            });
+            trailerGroup.add(cabFallbackObject);
+            frameVehicleView();
+        }).catch(error => console.warn('Não foi possível carregar a prévia leve do cavalinho.', error));
+    }
+
     loadCabModel(cabModelId).then(source => {
         if (drawRevision !== draw3DRevision) return;
+        cabModelLoaded = true;
+        if (cabFallbackObject) {
+            trailerGroup.remove(cabFallbackObject);
+            cabFallbackObject = null;
+        }
 
         const object = source.clone(true);
         
@@ -1768,7 +1988,8 @@ function draw3D(tr, pos, isCarreta) {
         box(wT,.24*S,mL,usesChassisModel?deckBase:deckMat,0,deckY-.12*S,deckCenterZ);
         box(wT*.94,.045*S,mL*.96,woodMat,0,deckY+.02*S,deckCenterZ);
         drawDeckDetails(wT,mL,deckCenterZ,deckY+0.045*S,!usesChassisModel);
-        const startAxleZ = rearStart + 1.2*S;
+        const axleLayout = getCarretaAxleLayout(tr);
+        const startAxleZ = rearStart + axleLayout.firstFromRear*S;
         
         if (usesChassisModel) {
             addChassisModel();
@@ -1776,7 +1997,7 @@ function draw3D(tr, pos, isCarreta) {
             if (tr.tipo === 'vanderleia') {
                 const axleY = 0.49*S;
                 const rW = 0.48*S;
-                const axSpacing = 2.4*S;
+                const axSpacing = axleLayout.spacing*S;
                 
                 for(let i=0; i<tr.eixos; i++){
                     const z = startAxleZ + i*axSpacing;
@@ -1803,7 +2024,7 @@ function draw3D(tr, pos, isCarreta) {
 
             const axleY = 0.49*S;
             const rW = 0.48*S;
-            const axSpacing = tr.tipo === 'vanderleia' ? 2.4*S : 1.2*S;
+            const axSpacing = axleLayout.spacing*S;
             
             for(let i=0; i<tr.eixos; i++){
                 const z = startAxleZ + i*axSpacing;
@@ -2624,9 +2845,9 @@ function draw3D(tr, pos, isCarreta) {
                 const r=Math.floor(i/grid.maxCols);
                 const c=i%grid.maxCols;
                 const rowItems=Math.min(grid.maxCols,carga.qtd-r*grid.maxCols);
-                const rowW=rowItems*cW+Math.max(0,rowItems-1)*GAP*S;
-                const itemX=-rowW/2+cW/2+c*(cW+GAP*S);
-                const rowOffset=r*(coilLength+GAP)*S;
+                const rowW=rowItems*cW+Math.max(0,rowItems-1)*grid.gap*S;
+                const itemX=-rowW/2+cW/2+c*(cW+grid.gap*S);
+                const rowOffset=r*(coilLength+grid.gap)*S;
                 const neckItem=baseItem.clone();
                 neckItem.position.set(itemX,neckY,neckFrontZ-coilLength/2-rowOffset);
                 loadGroup.add(neckItem);
@@ -2640,10 +2861,10 @@ function draw3D(tr, pos, isCarreta) {
             const c = i % grid.maxCols;
             
             const rowItems = Math.min(grid.maxCols, carga.qtd - r * grid.maxCols);
-            const rowW = rowItems * cW + Math.max(0, rowItems - 1) * GAP * S;
+            const rowW = rowItems * cW + Math.max(0, rowItems - 1) * grid.gap * S;
             
-            const itemX = -rowW / 2 + cW / 2 + c * (cW + GAP * S);
-            const itemZ = loadZ_start - cL / 2 - r * (cL + GAP * S);
+            const itemX = -rowW / 2 + cW / 2 + c * (cW + grid.gap * S);
+            const itemZ = loadZ_start - cL / 2 - r * (cL + grid.gap * S);
             
             const inst = baseItem.clone();
             inst.position.set(itemX, loadY, itemZ);
@@ -3154,9 +3375,9 @@ function drawSide2D(ctx, canvas, tr, pos, isCarreta) {
     ctx.fillStyle = '#475569';
     if (isCarreta) {
         ctx.fillRect(startX - mL, groundY - pH, mL, 0.3*scale);
-        const axSpacing = tr.tipo === 'vanderleia' ? 2.4*scale : 1.2*scale;
-        const startAxleX = startX - mL + 1.5*scale;
-        for(let i=0; i<tr.eixos; i++) drawWheel(startAxleX + (i*axSpacing));
+        const axleLayout = getCarretaAxleLayout(tr);
+        const startAxleX = startX - mL + axleLayout.firstFromRear*scale;
+        for(let i=0; i<tr.eixos; i++) drawWheel(startAxleX + (i*axleLayout.spacing*scale));
     } else {
         ctx.fillRect(startX - pL, groundY - pH, pL, 0.3*scale); 
         if(tr.tipo === 'reta') {
@@ -3193,7 +3414,7 @@ function drawSide2D(ctx, canvas, tr, pos, isCarreta) {
 
             for(let i=0;i<carga.qtd;i++){
                 const r=Math.floor(i/grid.maxCols);
-                const rowOffset=r*(coilLength+GAP)*scale;
+                const rowOffset=r*(coilLength+grid.gap)*scale;
                 drawCargoRect(ctx,neckFrontX-coilLength-rowOffset,neckY,coilLength,cH,carga);
                 drawCargoRect(ctx,mesaFrontX-coilLength-rowOffset,mesaY,coilLength,cH,carga);
             }
@@ -3204,7 +3425,7 @@ function drawSide2D(ctx, canvas, tr, pos, isCarreta) {
         const currentX = loadFrontX-startOffset*scale;
         
         for (let r = 0; r < grid.rows; r++) {
-            const itemX = currentX - cL - r * (carga.comp + GAP) * scale;
+            const itemX = currentX - cL - r * (carga.comp + grid.gap) * scale;
             drawCargoRect(ctx, itemX, cY, cL, cH, carga);
         }
     });
@@ -3225,7 +3446,7 @@ function drawRear2D(ctx, canvas, tr, pos, isCarreta) {
     let widestCarga = null;
     let maxW = 0;
     composicaoCargas.forEach(c => {
-        const grid = getGridMetrics(tr, c.comp, c.larg, c.qtd, isCarreta);
+        const grid = getGridMetrics(tr, c, isCarreta);
         if(grid.totalLarg > maxW) {
             maxW = grid.totalLarg;
             widestCarga = c;
@@ -3255,17 +3476,17 @@ function drawRear2D(ctx, canvas, tr, pos, isCarreta) {
     }
 
     if (widestCarga) {
-        const grid = getGridMetrics(tr, widestCarga.comp, widestCarga.larg, widestCarga.qtd, isCarreta);
+        const grid = getGridMetrics(tr, widestCarga, isCarreta);
         const cW = widestCarga.larg * scale;
         const cH = widestCarga.alt * scale;
         const cY = groundY - tH - cH;
         
         const firstRowItems = Math.min(grid.maxCols, widestCarga.qtd);
-        const rowW_Scale = firstRowItems * cW + Math.max(0, firstRowItems - 1) * GAP * scale;
+        const rowW_Scale = firstRowItems * cW + Math.max(0, firstRowItems - 1) * grid.gap * scale;
         const startX_row = centerX - rowW_Scale / 2;
 
         for (let c = 0; c < firstRowItems; c++) {
-            const itemX = startX_row + c * (cW + GAP * scale);
+            const itemX = startX_row + c * (cW + grid.gap * scale);
             drawCargoRect(ctx, itemX, cY, cW, cH, widestCarga);
         }
 
@@ -3331,21 +3552,27 @@ els.btnReset.addEventListener('click', () => {
     atualizarBotaoCarga();
     renderListaCargas();
     inputs.placa_carreta.value = ""; inputs.placa_prancha.value = "prancha_reb_6_3";
+    setVehicleSelectorTab('prancha');
     updateTrailerInfo();
 });
 
 function setCargaTab(tab) {
     const isTubes = tab === 'tubos';
-    if (isTubes && !TUBE_TRAILER_IDS.has(getActiveTrailerId())) {
+    if (isTubes && !cargoTrailerSelectionBeforeTubes) {
         cargoTrailerSelectionBeforeTubes = {
             prancha: inputs.placa_prancha.value,
-            carreta: inputs.placa_carreta.value
+            carreta: inputs.placa_carreta.value,
+            vehicleTab: document.querySelector('[data-vehicle-tab][aria-selected="true"]')?.dataset.vehicleTab
         };
-        inputs.placa_prancha.value = "";
-        inputs.placa_carreta.value = "carreta_padrao";
+        if (!TUBE_TRAILER_IDS.has(getActiveTrailerId())) {
+            inputs.placa_prancha.value = "";
+            inputs.placa_carreta.value = "carreta_padrao";
+        }
     } else if (!isTubes && cargoTrailerSelectionBeforeTubes) {
         inputs.placa_prancha.value = cargoTrailerSelectionBeforeTubes.prancha;
         inputs.placa_carreta.value = cargoTrailerSelectionBeforeTubes.carreta;
+        setVehicleSelectorTab(cargoTrailerSelectionBeforeTubes.vehicleTab ||
+            (cargoTrailerSelectionBeforeTubes.carreta ? 'carreta' : 'prancha'));
         cargoTrailerSelectionBeforeTubes = null;
     }
     activeCargaTab = tab;

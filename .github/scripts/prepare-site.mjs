@@ -29,7 +29,7 @@ for (const file of files) {
 }
 
 if (androidShell) {
-    for (const file of [...modelFiles, 'scania_S-730.glb.gz']) {
+    for (const file of [...modelFiles, 'scania_S-730.glb.gz', 'chassi-para-carreta-14-15.glb.gz']) {
         await rm(resolve(output, file), { force: true });
     }
     await rm(resolve(output, 'OBJ'), { recursive: true, force: true });
@@ -38,6 +38,11 @@ if (androidShell) {
     await writeFile(
         resolve(output, 'scania_S-730.glb.gz'),
         gzipSync(scaniaModel, { level: 9 })
+    );
+    const trailerChassis = await readFile(resolve(root, 'chassi-para-carreta-14-15.glb'));
+    await writeFile(
+        resolve(output, 'chassi-para-carreta-14-15.glb.gz'),
+        gzipSync(trailerChassis, { level: 9 })
     );
     await cp(resolve(root, 'OBJ'), resolve(output, 'OBJ'), { recursive: true });
 }
