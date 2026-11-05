@@ -56,6 +56,9 @@ const cabTexturePaletteCache = new WeakMap();
 const cabBrightTextureCache = new WeakMap();
 const cabGrayTextureCache = new WeakMap();
 
+const SUPABASE_URL = 'https://ocjiopkkmxwycrmighrh.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_5jfnHsWZfVxxrunMdYPK-g_7njfoMnD';
+
 // --- ESTADO GLOBAL DA COMPOSIÇÃO DE CARGAS ---
 let composicaoCargas = [];
 let editingCargaIndex = null;
@@ -63,6 +66,13 @@ let activeCargaTab = 'cargas';
 let tubeInputUpdateTimer = null;
 let tubeStrappingEnabled = true;
 let cargoTrailerSelectionBeforeTubes = null;
+let supabaseClient = null;
+let authenticatedUser = null;
+let activePlanId = null;
+let appReadyResolve;
+const appReady = new Promise(resolve => {
+    appReadyResolve = resolve;
+});
 
 const TUBE_TRAILER_IDS = new Set([
     'carreta_ext',
@@ -3570,6 +3580,378 @@ Object.values(tubeInputs).forEach(input => {
     });
 });
 
+function setSupabaseStatus(message, isError = false) {
+    const status = document.getElementById('supabase_status');
+    status.textContent = message;
+    status.className = `mt-1 text-xs ${isError ? 'text-red-700' : 'text-slate-600'}`;
+}
+
+function setAccountControlsVisible(isSignedIn) {
+    document.getElementById('auth_form').classList.toggle('hidden', isSignedIn);
+    document.getElementById('account_actions').classList.toggle('hidden', !isSignedIn);
+    const signedInEmail = document.getElementById('signed_in_email');
+    signedInEmail.classList.toggle('hidden', !isSignedIn);
+    signedInEmail.textContent = isSignedIn ? authenticatedUser.email : '';
+}
+
+function setAuthBusy(isBusy) {
+    document.getElementById('auth_login').disabled = isBusy;
+    document.getElementById('auth_signup').disabled = isBusy;
+}
+
+function renderSavedPlans(plans) {
+    const select = document.getElementById('saved_plans');
+    select.replaceChildren();
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = plans.length ? 'Selecione um planejamento' : 'Nenhum planejamento salvo';
+    select.appendChild(placeholder);
+
+    plans.forEach(plan => {
+        const option = document.createElement('option');
+        option.value = plan.id;
+        option.textContent = plan.name;
+        select.appendChild(option);
+    });
+
+    select.value = activePlanId || '';
+    document.getElementById('plan_load').disabled = !select.value;
+    document.getElementById('plan_delete').disabled = !select.value;
+}
+
+async function refreshSavedPlans() {
+    if (!supabaseClient || !authenticatedUser) return;
+
+    const { data, error } = await supabaseClient
+        .from('saved_plans')
+        .select('id, name, updated_at')
+        .order('updated_at', { ascending: false });
+    if (error) throw error;
+
+    if (activePlanId && !data.some(plan => plan.id === activePlanId)) {
+        activePlanId = null;
+    }
+    renderSavedPlans(data);
+}
+
+function capturePlanState() {
+    return {
+        version: 1,
+        activeTab: activeCargaTab,
+        vehicleTab: document.querySelector('[data-vehicle-tab][aria-selected="true"]')?.dataset.vehicleTab || 'prancha',
+        trailer: {
+            cavalinho: inputs.cavalinho.value,
+            prancha: inputs.placa_prancha.value,
+            carreta: inputs.placa_carreta.value,
+            posicao: inputs.posicao.value,
+            tampas: inputs.tampas.value
+        },
+        cargo: {
+            items: composicaoCargas.map(item => ({ ...item })),
+            type: tipoCargaSelect.value,
+            armador: inputArmador.value,
+            comp: inputs.cComp.value,
+            larg: inputs.cLarg.value,
+            alt: inputs.cAlt.value,
+            peso: inputs.cPeso.value,
+            qtd: inputs.cQtd.value
+        },
+        tubes: Object.fromEntries(
+            Object.entries(tubeInputs).map(([key, input]) => [key, input.value])
+        ),
+        tubeStrappingEnabled,
+        cargoTrailerSelectionBeforeTubes: cargoTrailerSelectionBeforeTubes
+            ? { ...cargoTrailerSelectionBeforeTubes }
+            : null
+    };
+}
+
+function validatePlanState(state) {
+    if (!state || state.version !== 1 || !['cargas', 'tubos'].includes(state.activeTab)) {
+        throw new Error('Este planejamento tem um formato inválido ou incompatível.');
+    }
+    if (!state.trailer || !state.cargo || !Array.isArray(state.cargo.items) || !state.tubes) {
+        throw new Error('Este planejamento está incompleto ou inválido.');
+    }
+    if (state.cargo.items.length > 500 || !LOAD_TYPES.some(type => type.value === state.cargo.type)) {
+        throw new Error('Este planejamento contém dados inválidos.');
+    }
+    const validVehicleTabs = ['cavalinho', 'prancha', 'carreta'];
+    if (!validVehicleTabs.includes(state.vehicleTab) ||
+        !CAB_MODELS[state.trailer.cavalinho] ||
+        (state.trailer.prancha && !bdVeiculos[state.trailer.prancha]) ||
+        (state.trailer.carreta && !bdVeiculos[state.trailer.carreta]) ||
+        !['mesa', 'pescoco'].includes(state.trailer.posicao) ||
+        !['com', 'sem'].includes(state.trailer.tampas)) {
+        throw new Error('Este planejamento contém um veículo inválido.');
+    }
+    const validItems = state.cargo.items.every(item =>
+        item && LOAD_TYPES.some(type => type.value === item.type) &&
+        Number.isFinite(item.comp) && item.comp > 0 &&
+        Number.isFinite(item.larg) && item.larg > 0 &&
+        Number.isFinite(item.alt) && item.alt > 0 &&
+        Number.isFinite(item.peso) && item.peso >= 0 &&
+        Number.isInteger(item.qtd) && item.qtd > 0
+    );
+    if (!validItems) throw new Error('Este planejamento contém cargas inválidas.');
+}
+
+function restorePlanState(state) {
+    validatePlanState(state);
+
+    activeCargaTab = 'cargas';
+    cargoTrailerSelectionBeforeTubes = null;
+    composicaoCargas = state.cargo.items.map(item => ({ ...item }));
+
+    inputs.cavalinho.value = state.trailer.cavalinho;
+    inputs.placa_prancha.value = state.trailer.prancha || '';
+    inputs.placa_carreta.value = state.trailer.carreta || '';
+    setVehicleSelectorTab(state.vehicleTab);
+    if (state.activeTab === 'tubos' && state.cargoTrailerSelectionBeforeTubes) {
+        cargoTrailerSelectionBeforeTubes = { ...state.cargoTrailerSelectionBeforeTubes };
+    }
+    setCargaTab(state.activeTab);
+
+    tipoCargaSelect.value = state.cargo.type;
+    inputArmador.value = state.cargo.armador || 'generico';
+    inputs.cComp.value = state.cargo.comp;
+    inputs.cLarg.value = state.cargo.larg;
+    inputs.cAlt.value = state.cargo.alt;
+    inputs.cPeso.value = state.cargo.peso;
+    inputs.cQtd.value = state.cargo.qtd;
+    divArmador.classList.toggle(
+        'hidden',
+        !CONTAINER_LOAD_TYPES.has(state.cargo.type) || UNBRANDED_CONTAINER_TYPES.has(state.cargo.type)
+    );
+
+    Object.entries(tubeInputs).forEach(([key, input]) => {
+        if (typeof state.tubes[key] === 'string' || typeof state.tubes[key] === 'number') {
+            input.value = String(state.tubes[key]);
+        }
+    });
+    inputs.posicao.value = state.trailer.posicao;
+    inputs.tampas.value = state.trailer.tampas;
+    tubeStrappingEnabled = state.tubeStrappingEnabled !== false;
+    document.getElementById('tube_strapping_on').className = tubeStrappingEnabled
+        ? 'load-tab load-tab-active'
+        : 'load-tab';
+    document.getElementById('tube_strapping_off').className = tubeStrappingEnabled
+        ? 'load-tab'
+        : 'load-tab load-tab-active';
+    document.getElementById('tube_strapping_on').setAttribute('aria-pressed', String(tubeStrappingEnabled));
+    document.getElementById('tube_strapping_off').setAttribute('aria-pressed', String(!tubeStrappingEnabled));
+
+    editingCargaIndex = null;
+    atualizarBotaoCarga();
+    renderListaCargas();
+    analyzeAndDraw();
+}
+
+async function initializeSupabaseCloud() {
+    if (!window.supabase?.createClient) {
+        setSupabaseStatus('Não foi possível carregar o cliente Supabase. Verifique a conexão e recarregue a página.', true);
+        return;
+    }
+
+    try {
+        supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+    } catch (error) {
+        setSupabaseStatus(`Não foi possível iniciar o Supabase: ${error.message}`, true);
+        return;
+    }
+    supabaseClient.auth.onAuthStateChange((_event, session) => {
+        authenticatedUser = session?.user || null;
+        setAccountControlsVisible(Boolean(authenticatedUser));
+        if (authenticatedUser) {
+            setSupabaseStatus('Conta conectada. Seus planejamentos são privados.');
+            window.setTimeout(() => {
+                refreshSavedPlans().catch(error => {
+                    setSupabaseStatus(`Não foi possível listar os planejamentos: ${error.message}`, true);
+                });
+            }, 0);
+        } else {
+            activePlanId = null;
+            renderSavedPlans([]);
+            setSupabaseStatus('Entre ou crie uma conta para salvar seus planejamentos na nuvem.');
+        }
+    });
+
+    let session;
+    try {
+        const { data, error } = await supabaseClient.auth.getSession();
+        if (error) throw error;
+        session = data.session;
+    } catch (error) {
+        setSupabaseStatus(`Não foi possível verificar a sessão: ${error.message}`, true);
+        return;
+    }
+
+    await appReady;
+    authenticatedUser = session?.user || null;
+    setAccountControlsVisible(Boolean(authenticatedUser));
+    if (authenticatedUser) {
+        setSupabaseStatus('Conta conectada. Seus planejamentos são privados.');
+        try {
+            await refreshSavedPlans();
+        } catch (refreshError) {
+            setSupabaseStatus(`Não foi possível listar os planejamentos: ${refreshError.message}`, true);
+        }
+    } else {
+        renderSavedPlans([]);
+        setSupabaseStatus('Entre ou crie uma conta para salvar seus planejamentos na nuvem.');
+    }
+}
+
+document.getElementById('auth_form').addEventListener('submit', async event => {
+    event.preventDefault();
+    if (!supabaseClient) {
+        setSupabaseStatus('O Supabase ainda não está disponível. Recarregue a página e tente novamente.', true);
+        return;
+    }
+
+    setAuthBusy(true);
+    const email = document.getElementById('auth_email').value.trim();
+    const password = document.getElementById('auth_password').value;
+    try {
+        const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        setSupabaseStatus('Login realizado com sucesso.');
+    } catch (error) {
+        setSupabaseStatus(`Não foi possível entrar: ${error.message}`, true);
+    } finally {
+        setAuthBusy(false);
+    }
+});
+
+document.getElementById('auth_signup').addEventListener('click', async () => {
+    if (!supabaseClient) {
+        setSupabaseStatus('O Supabase ainda não está disponível. Recarregue a página e tente novamente.', true);
+        return;
+    }
+
+    const form = document.getElementById('auth_form');
+    if (!form.reportValidity()) return;
+    setAuthBusy(true);
+    const email = document.getElementById('auth_email').value.trim();
+    const password = document.getElementById('auth_password').value;
+    try {
+        const { data, error } = await supabaseClient.auth.signUp({
+            email,
+            password,
+            options: { emailRedirectTo: window.location.href }
+        });
+        if (error) throw error;
+        setSupabaseStatus(data.session
+            ? 'Conta criada e conectada.'
+            : 'Conta criada. Confirme seu e-mail para concluir o acesso.');
+    } catch (error) {
+        setSupabaseStatus(`Não foi possível criar a conta: ${error.message}`, true);
+    } finally {
+        setAuthBusy(false);
+    }
+});
+
+document.getElementById('auth_logout').addEventListener('click', async () => {
+    if (!supabaseClient) return;
+    try {
+        const { error } = await supabaseClient.auth.signOut();
+        if (error) throw error;
+    } catch (error) {
+        setSupabaseStatus(`Não foi possível sair da conta: ${error.message}`, true);
+    }
+});
+
+document.getElementById('saved_plans').addEventListener('change', event => {
+    activePlanId = event.target.value || null;
+    document.getElementById('plan_load').disabled = !activePlanId;
+    document.getElementById('plan_delete').disabled = !activePlanId;
+});
+
+document.getElementById('plan_new').addEventListener('click', () => {
+    activePlanId = null;
+    document.getElementById('saved_plans').value = '';
+    document.getElementById('plan_name').value = '';
+    document.getElementById('plan_load').disabled = true;
+    document.getElementById('plan_delete').disabled = true;
+    setSupabaseStatus('Novo planejamento. Salve para armazená-lo na sua conta.');
+});
+
+document.getElementById('plan_save').addEventListener('click', async () => {
+    if (!supabaseClient || !authenticatedUser) {
+        setSupabaseStatus('Entre na sua conta antes de salvar um planejamento.', true);
+        return;
+    }
+
+    const name = document.getElementById('plan_name').value.trim();
+    if (!name || name.length > 100) {
+        setSupabaseStatus('Informe um nome de até 100 caracteres para o planejamento.', true);
+        return;
+    }
+
+    const payload = {
+        name,
+        data: capturePlanState(),
+        updated_at: new Date().toISOString()
+    };
+    const button = document.getElementById('plan_save');
+    button.disabled = true;
+    try {
+        const request = activePlanId
+            ? supabaseClient.from('saved_plans').update(payload)
+                .eq('id', activePlanId).eq('user_id', authenticatedUser.id)
+            : supabaseClient.from('saved_plans').insert({
+                ...payload,
+                user_id: authenticatedUser.id
+            });
+        const { data, error } = await request.select('id').single();
+        if (error) throw error;
+        activePlanId = data.id;
+        await refreshSavedPlans();
+        setSupabaseStatus('Planejamento salvo com segurança na sua conta.');
+    } catch (error) {
+        setSupabaseStatus(`Não foi possível salvar. Verifique se a migração SQL foi aplicada: ${error.message}`, true);
+    } finally {
+        button.disabled = false;
+    }
+});
+
+document.getElementById('plan_load').addEventListener('click', async () => {
+    if (!supabaseClient || !authenticatedUser || !activePlanId) return;
+    try {
+        const { data, error } = await supabaseClient
+            .from('saved_plans')
+            .select('id, name, data')
+            .eq('id', activePlanId)
+            .single();
+        if (error) throw error;
+        restorePlanState(data.data);
+        document.getElementById('plan_name').value = data.name;
+        setSupabaseStatus(`Planejamento "${data.name}" carregado.`);
+    } catch (error) {
+        setSupabaseStatus(`Não foi possível carregar o planejamento: ${error.message}`, true);
+    }
+});
+
+document.getElementById('plan_delete').addEventListener('click', async () => {
+    if (!supabaseClient || !authenticatedUser || !activePlanId) return;
+    const selectedPlan = document.getElementById('saved_plans').selectedOptions[0]?.textContent;
+    if (!window.confirm(`Excluir o planejamento "${selectedPlan}"? Esta ação não pode ser desfeita.`)) return;
+    try {
+        const { error } = await supabaseClient
+            .from('saved_plans')
+            .delete()
+            .eq('id', activePlanId)
+            .eq('user_id', authenticatedUser.id);
+        if (error) throw error;
+        activePlanId = null;
+        document.getElementById('plan_name').value = '';
+        await refreshSavedPlans();
+        setSupabaseStatus('Planejamento excluído.');
+    } catch (error) {
+        setSupabaseStatus(`Não foi possível excluir o planejamento: ${error.message}`, true);
+    }
+});
+
 loadCabModel('scania_s_730').catch(error => {
     console.error('Erro ao pré-carregar o cavalinho Scania:', error);
 });
@@ -3582,4 +3964,7 @@ window.addEventListener('load', () => {
     initThreeJS();
     updateTrailerInfo();
     renderListaCargas();
+    appReadyResolve();
 });
+
+initializeSupabaseCloud();
