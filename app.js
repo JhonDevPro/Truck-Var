@@ -1940,9 +1940,12 @@ function draw3D(tr, pos, isCarreta) {
                     }
 
                     if (/tyre|tire|rubber/.test(name)) {
-                        material.color.setHex(0x151515);
+                        material.color.setHex(0x202124);
                     } else if (/rim|hub|alum|chrome|mirror/.test(name)) {
-                        material.color.setHex(0xc0c0c0);
+                        material.map = null;
+                        material.color.setHex(0x9ca3af);
+                        if ('metalness' in material) material.metalness = 0.12;
+                        if ('roughness' in material) material.roughness = 0.48;
                     } else if (/glass|signal|reflector|placa/.test(name)) {
                         return material;
                     } else {
@@ -2071,6 +2074,7 @@ function draw3D(tr, pos, isCarreta) {
 
                     const material = original.clone();
                     const materialName = `${material.name || ''} ${node.name || ''}`.toLowerCase();
+                    const sourceMaterialName = (material.name || '').toLowerCase();
 
                     const isDarkDetail = /glass|window|windshield|tire|tyre|rubber|wheel|pneu|vidro|grill|grille|lamp|headlight|tail.?light|preto|black|chrome|logo|cinza|gray|grey|prata|silver/.test(materialName);
 
@@ -2084,6 +2088,16 @@ function draw3D(tr, pos, isCarreta) {
                         material.emissiveIntensity = 0.8;
                         if ('metalness' in material) material.metalness = 0.05;
                         if ('roughness' in material) material.roughness = 0.5;
+                    } else if (cabModelId === 'scania_s_730' && /^prata(?:\.\d+)?$/.test(sourceMaterialName)) {
+                        material.color.setHex(0x9ca3af);
+                        material.emissive = new THREE.Color(0x252a30);
+                        material.emissiveIntensity = 0.2;
+                        if ('metalness' in material) material.metalness = 0.18;
+                        if ('roughness' in material) material.roughness = 0.48;
+                    } else if (cabModelId === 'scania_s_730' && /^pneu(?:\.\d+)?$/.test(sourceMaterialName)) {
+                        material.color.setHex(0x202124);
+                        if ('metalness' in material) material.metalness = 0;
+                        if ('roughness' in material) material.roughness = 0.9;
                     } else if (!isDarkDetail) {
                         if (cabConfig.bodyColor !== undefined) {
                             if (material.map) material.map = grayCabTexture(material.map);
