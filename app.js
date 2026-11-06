@@ -61,6 +61,7 @@ const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_5jfnHsWZfVxxrunMdYPK-g_7njfoMnD
 
 // --- ESTADO GLOBAL DA COMPOSIÇÃO DE CARGAS ---
 let composicaoCargas = [];
+let cargasTransbordo = [];
 let editingCargaIndex = null;
 let activeCargaTab = 'cargas';
 let tubeInputUpdateTimer = null;
@@ -282,6 +283,7 @@ const inputs = {
     cAlt: document.getElementById('input_carga_altura'),
     cPeso: document.getElementById('input_carga_peso'),
     cQtd: document.getElementById('input_carga_qtd'), // Lendo a quantidade do HTML
+    cCamadas: document.getElementById('input_carga_camadas'),
     posicao: document.getElementById('input_posicao'),
     tampas: document.getElementById('input_tampas')
 };
@@ -531,15 +533,17 @@ function getCarretaAxleLayout(tr) {
 
 function getGridMetrics(tr, carga, isCarreta, cComp = carga.comp) {
     const { larg: cLarg, qtd: cQtd, peso, type } = carga;
+    const camadas = Math.max(1, Number.parseInt(carga.camadas, 10) || 1);
+    const pecasNaBase = Math.ceil(cQtd / camadas);
     const standardGap = getLoadGap(type);
     const usesGates = isCarreta && inputs.tampas.value === 'com' && tr.tipo !== 'sider' && tr.tipo !== 'carreta_bau';
     const availableWidth = usesGates ? tr.w_util : tr.w;
     const isDistributed = isCarreta &&
         peso * cQtd > tr.cap / 2 &&
-        cQtd > 1 &&
-        cQtd * cComp <= tr.mesa;
+        pecasNaBase > 1 &&
+        pecasNaBase * cComp <= tr.mesa;
     const gap = isDistributed
-        ? (tr.mesa - cQtd * cComp) / (cQtd - 1)
+        ? (tr.mesa - pecasNaBase * cComp) / (pecasNaBase - 1)
         : standardGap;
 
     let maxCols = isDistributed
@@ -547,12 +551,27 @@ function getGridMetrics(tr, carga, isCarreta, cComp = carga.comp) {
         : Math.floor((availableWidth + gap) / (cLarg + gap));
     if (maxCols < 1) maxCols = 1; 
     
-    const rows = Math.ceil(cQtd / maxCols);
+    const rows = Math.ceil(pecasNaBase / maxCols);
     const totalComp = rows * cComp + Math.max(0, rows - 1) * gap;
-    const maxItemsInRow = Math.min(cQtd, maxCols);
+    const maxItemsInRow = Math.min(pecasNaBase, maxCols);
     const totalLarg = maxItemsInRow * cLarg + Math.max(0, maxItemsInRow - 1) * gap;
 
-    return { maxCols, rows, totalComp, totalLarg, availableWidth, gap, isDistributed };
+    return {
+        maxCols,
+        rows,
+        totalComp,
+        totalLarg,
+        availableWidth,
+        gap,
+        isDistributed,
+        pecasNaBase,
+        camadas,
+        maxStackHeight: carga.alt * Math.min(camadas, cQtd)
+    };
+}
+
+function getStackCount(carga, baseIndex, camadas = Math.max(1, Number.parseInt(carga.camadas, 10) || 1)) {
+    return Math.max(0, Math.min(camadas, carga.qtd - baseIndex * camadas));
 }
 
 function getTubeMetrics(tr) {
@@ -681,11 +700,14 @@ function getTubePositions(tube, limit = Math.min(tube.loaded, 1200)) {
     return positions;
 }
 
-function getLoadSequenceMetrics(tr, isCarreta) {
+function positionLoadAllocations(tr, isCarreta, allocations) {
     let mesaOffset = 0;
     let pescocoOffset = 0;
     const pos = inputs.posicao.value;
-    const loads = composicaoCargas.map(carga => {
+    const loads = composicaoCargas.flatMap((originalCarga, index) => {
+        const qtdAlocada = allocations[index] || 0;
+        if (qtdAlocada <= 0) return [];
+        const carga = { ...originalCarga, qtd: qtdAlocada, qtdAlocada };
         const splitCoils = !isCarreta && tr.pescoco > 0 &&
             (carga.type === 'bobina_lado_2' || carga.type === 'bobina_frente_2');
         const clearance = getLoadStartClearance(carga.type);
@@ -695,7 +717,7 @@ function getLoadSequenceMetrics(tr, isCarreta) {
             carga.qtd === 1 &&
             carga.peso * carga.qtd > tr.cap / 2 &&
             grid.totalComp + grid.gap < tr.mesa / 2;
-        return { carga, grid, clearance, splitCoils, coilLength, isConcentrada };
+        return [{ carga, originalCarga, grid, clearance, splitCoils, coilLength, isConcentrada }];
     });
 
     if (isCarreta) {
@@ -717,7 +739,8 @@ function getLoadSequenceMetrics(tr, isCarreta) {
                 loads,
                 totalComp: mesaComp,
                 mesaComp,
-                pescocoComp: 0
+                pescocoComp: 0,
+                allocations
             };
         }
 
@@ -772,7 +795,7 @@ function getLoadSequenceMetrics(tr, isCarreta) {
             (maxEnd, load) => Math.max(maxEnd, load.startOffset + load.grid.totalComp),
             0
         );
-        return { loads, totalComp: mesaComp, mesaComp, pescocoComp: 0 };
+        return { loads, totalComp: mesaComp, mesaComp, pescocoComp: 0, allocations };
     }
 
     let mesaEnd = 0;
@@ -811,8 +834,49 @@ function getLoadSequenceMetrics(tr, isCarreta) {
         loads,
         totalComp: pos === 'pescoco' ? pescocoEnd : mesaEnd,
         mesaComp: mesaEnd,
-        pescocoComp: pescocoEnd
+        pescocoComp: pescocoEnd,
+        allocations
     };
+}
+
+function getLoadSequenceMetrics(tr, isCarreta) {
+    const allocations = composicaoCargas.map(() => 0);
+    cargasTransbordo = [];
+
+    const fitsVehicle = sequence => {
+        const weight = sequence.loads.reduce(
+            (total, load) => total + load.carga.peso * load.carga.qtd,
+            0
+        );
+        if (weight > tr.cap + 1e-9) return false;
+        if (isCarreta) return sequence.mesaComp <= tr.mesa + 1e-9;
+        if (sequence.loads.some(load => load.splitCoils)) {
+            return sequence.mesaComp <= tr.mesa + 1e-9 &&
+                sequence.pescocoComp <= tr.pescoco + 1e-9;
+        }
+        return inputs.posicao.value === 'pescoco'
+            ? sequence.pescocoComp <= tr.pescoco + 1e-9
+            : sequence.mesaComp <= tr.mesa + 1e-9;
+    };
+
+    composicaoCargas.forEach((carga, index) => {
+        let low = 0;
+        let high = carga.qtd;
+        while (low < high) {
+            const candidate = Math.ceil((low + high) / 2);
+            allocations[index] = candidate;
+            const sequence = positionLoadAllocations(tr, isCarreta, allocations);
+            if (fitsVehicle(sequence)) low = candidate;
+            else high = candidate - 1;
+        }
+        allocations[index] = low;
+        const qtdExcedente = carga.qtd - low;
+        if (qtdExcedente > 0) {
+            cargasTransbordo.push({ ...carga, qtd: qtdExcedente, qtdExcedente });
+        }
+    });
+
+    return positionLoadAllocations(tr, isCarreta, allocations);
 }
 
 // Atualiza a lista visual no HTML
@@ -837,7 +901,7 @@ function renderListaCargas() {
         editButton.setAttribute('aria-label', `Editar ${carga.qtd} ${typeLabel}`);
         editButton.innerHTML = `
             <span class="font-bold text-slate-700">${carga.qtd}x ${typeLabel}</span>
-            <span class="text-slate-500">${carga.comp.toFixed(1)}m x ${carga.larg.toFixed(1)}m x ${carga.alt.toFixed(1)}m &bull; ${carga.peso}t/unid</span>
+            <span class="text-slate-500">${carga.comp.toFixed(1)}m x ${carga.larg.toFixed(1)}m x ${carga.alt.toFixed(1)}m &bull; ${carga.camadas || 1} camada(s) &bull; ${carga.peso}t/unid</span>
         `;
         editButton.addEventListener('click', () => editarCarga(index));
 
@@ -878,6 +942,7 @@ function editarCarga(index) {
     inputs.cAlt.value = carga.alt;
     inputs.cPeso.value = carga.peso;
     inputs.cQtd.value = carga.qtd;
+    inputs.cCamadas.value = carga.camadas || 1;
     inputArmador.value = carga.armador || 'generico';
     atualizarBotaoCarga();
     renderListaCargas();
@@ -902,10 +967,11 @@ els.btnAdicionar.addEventListener('click', () => {
     const alt = parseFloat(inputs.cAlt.value) || 0.1;
     const peso = parseFloat(inputs.cPeso.value) || 0;
     const qtd = parseInt(inputs.cQtd.value) || 1; // Quantidade de peças deste bloco
+    const camadas = Math.max(1, Number.parseInt(inputs.cCamadas.value, 10) || 1);
     const type = document.getElementById('input_tipo_carga').value;
     const armador = document.getElementById('input_armador').value;
 
-    const cargaAtualizada = { comp, larg, alt, peso, type, armador, qtd };
+    const cargaAtualizada = { comp, larg, alt, peso, type, armador, qtd, camadas };
     if (editingCargaIndex === null) {
         composicaoCargas.push(cargaAtualizada);
     } else {
@@ -1070,13 +1136,13 @@ function renderCargoAnalysisSummary(loadSequence, totalWeight) {
         minimumFractionDigits: digits,
         maximumFractionDigits: digits
     });
-    const totalUnits = composicaoCargas.reduce((total, carga) => total + carga.qtd, 0);
+    const totalUnits = loadSequence.loads.reduce((total, load) => total + load.carga.qtd, 0);
     els.cargoSummary.units.textContent = format(totalUnits);
-    els.cargoSummary.types.textContent = format(composicaoCargas.length);
+    els.cargoSummary.types.textContent = format(loadSequence.loads.length);
     els.cargoSummary.weight.textContent = `${format(totalWeight, 2)} t`;
     els.cargoSummary.length.textContent = `${format(loadSequence.totalComp, 2)} m`;
     els.cargoSummary.items.replaceChildren();
-    els.cargoSummary.empty.classList.toggle('hidden', composicaoCargas.length > 0);
+    els.cargoSummary.empty.classList.toggle('hidden', loadSequence.loads.length > 0);
 
     loadSequence.loads.forEach(({ carga }) => {
         const typeLabel = LOAD_TYPES.find(type => type.value === carga.type)?.label || 'Carga';
@@ -1091,6 +1157,45 @@ function renderCargoAnalysisSummary(loadSequence, totalWeight) {
         item.append(description, weight);
         els.cargoSummary.items.appendChild(item);
     });
+}
+
+function getSpilloverSuggestion() {
+    const fleet = [
+        { name: 'VUC', cap: 1, comp: 4, larg: 2, alt: 3 },
+        { name: 'Toco', cap: 9, comp: 7, larg: 2.44, alt: 3 },
+        { name: 'Truck', cap: 15, comp: 8, larg: 2.44, alt: 3 }
+    ];
+    const totalPieces = cargasTransbordo.reduce((total, carga) => total + carga.qtd, 0);
+    const totalWeight = cargasTransbordo.reduce((total, carga) => total + carga.peso * carga.qtd, 0);
+    const vehicle = fleet.find(candidate => {
+        const vehicleTrailer = {
+            tipo: 'carreta',
+            w: candidate.larg,
+            w_util: candidate.larg,
+            mesa: candidate.comp,
+            cap: candidate.cap
+        };
+        let totalLength = 0;
+        let maxWidth = 0;
+        let maxHeight = 0;
+        let previousGap = 0;
+        cargasTransbordo.forEach((carga, index) => {
+            const grid = getGridMetrics(vehicleTrailer, carga, true);
+            const startGap = index === 0
+                ? (grid.isDistributed ? 0 : getLoadStartClearance(carga.type))
+                : previousGap;
+            totalLength += grid.totalComp + startGap;
+            previousGap = grid.gap;
+            maxWidth = Math.max(maxWidth, grid.totalLarg);
+            maxHeight = Math.max(maxHeight, grid.maxStackHeight);
+        });
+        return totalWeight <= candidate.cap &&
+            totalLength <= candidate.comp &&
+            maxWidth <= candidate.larg &&
+            maxHeight <= candidate.alt;
+    });
+
+    return { totalPieces, totalWeight, vehicle: vehicle?.name || 'Outra Carreta' };
 }
 
 function analyzeTubesAndDraw(tr, isCarreta) {
@@ -1162,7 +1267,10 @@ function analyzeAndDraw() {
     const tr = currentTrailer;
     const pos = inputs.posicao.value;
     const isCarreta = tr.tipo.includes('carreta') || tr.tipo === 'vanderleia' || tr.tipo === 'sider';
+    const spilloverAlert = document.getElementById('spillover_alert');
     if (activeCargaTab === 'tubos') {
+        spilloverAlert.classList.add('hidden');
+        spilloverAlert.textContent = '';
         analyzeTubesAndDraw(tr, isCarreta);
         return;
     }
@@ -1179,12 +1287,18 @@ function analyzeAndDraw() {
     const compTotalUsado = loadSequence.totalComp;
 
     loadSequence.loads.forEach(({ carga, grid }) => {
-        
         pesoTotal += (carga.peso * carga.qtd);
         if (grid.totalLarg > totalLargMax) totalLargMax = grid.totalLarg;
-        if (carga.alt > maxAlt) maxAlt = carga.alt;
+        if (grid.maxStackHeight > maxAlt) maxAlt = grid.maxStackHeight;
     });
     renderCargoAnalysisSummary(loadSequence, pesoTotal);
+    spilloverAlert.classList.toggle('hidden', cargasTransbordo.length === 0);
+    if (cargasTransbordo.length) {
+        const suggestion = getSpilloverSuggestion();
+        spilloverAlert.textContent = `⚠️ EXCEDENTE DE CARGA: ${suggestion.totalPieces} peças não couberam. Veículo sugerido para o transbordo: ${suggestion.vehicle}`;
+    } else {
+        spilloverAlert.textContent = '';
+    }
 
     let reqAET = false;
     let aetMotivo = "";
@@ -2789,34 +2903,37 @@ function draw3D(tr, pos, isCarreta) {
             const neckY = pH+cH/2;
             const mesaY = (tr.tipo==='reta'?pH:hT)+cH/2;
 
-            for(let i=0;i<carga.qtd;i++){
+            for(let i=0;i<grid.pecasNaBase;i++){
                 const r=Math.floor(i/grid.maxCols);
                 const c=i%grid.maxCols;
-                const rowItems=Math.min(grid.maxCols,carga.qtd-r*grid.maxCols);
+                const rowItems=Math.min(grid.maxCols,grid.pecasNaBase-r*grid.maxCols);
                 const rowW=rowItems*cW+Math.max(0,rowItems-1)*grid.gap*S;
                 const itemX=-rowW/2+cW/2+c*(cW+grid.gap*S);
                 const rowOffset=r*(coilLength+grid.gap)*S;
-                const neckItem=baseItem.clone();
-                neckItem.position.set(itemX,neckY,neckFrontZ-coilLength/2-rowOffset);
-                loadGroup.add(neckItem);
+                for (let layer = 0; layer < getStackCount(carga, i, grid.camadas); layer++) {
+                    const neckItem=baseItem.clone();
+                    neckItem.position.set(itemX,neckY+layer*cH,neckFrontZ-coilLength/2-rowOffset);
+                    loadGroup.add(neckItem);
 
-                const mesaItem=baseItem.clone();
-                mesaItem.position.set(itemX,mesaY,mesaFrontZ-coilLength/2-rowOffset);
-                loadGroup.add(mesaItem);
+                    const mesaItem=baseItem.clone();
+                    mesaItem.position.set(itemX,mesaY+layer*cH,mesaFrontZ-coilLength/2-rowOffset);
+                    loadGroup.add(mesaItem);
+                }
             }
-        } else for (let i = 0; i < carga.qtd; i++) {
+        } else for (let i = 0; i < grid.pecasNaBase; i++) {
             const r = Math.floor(i / grid.maxCols);
             const c = i % grid.maxCols;
             
-            const rowItems = Math.min(grid.maxCols, carga.qtd - r * grid.maxCols);
+            const rowItems = Math.min(grid.maxCols, grid.pecasNaBase - r * grid.maxCols);
             const rowW = rowItems * cW + Math.max(0, rowItems - 1) * grid.gap * S;
             
             const itemX = -rowW / 2 + cW / 2 + c * (cW + grid.gap * S);
             const itemZ = loadZ_start - cL / 2 - r * (cL + grid.gap * S);
-            
-            const inst = baseItem.clone();
-            inst.position.set(itemX, loadY, itemZ);
-            loadGroup.add(inst);
+            for (let layer = 0; layer < getStackCount(carga, i, grid.camadas); layer++) {
+                const inst = baseItem.clone();
+                inst.position.set(itemX, loadY + layer * cH, itemZ);
+                loadGroup.add(inst);
+            }
         }
         
     });
@@ -3293,7 +3410,10 @@ function drawSide2D(ctx, canvas, tr, pos, isCarreta) {
     const cTractor = 4.5;
     const bridgeL = 3.5;
     let maxCargaH = 0;
-    composicaoCargas.forEach(c => { if(c.alt > maxCargaH) maxCargaH = c.alt; });
+    const loadSequence = getLoadSequenceMetrics(tr, isCarreta);
+    loadSequence.loads.forEach(({ grid }) => {
+        maxCargaH = Math.max(maxCargaH, grid.maxStackHeight);
+    });
     
     const trailerSpan = isCarreta
         ? tr.mesa
@@ -3347,7 +3467,6 @@ function drawSide2D(ctx, canvas, tr, pos, isCarreta) {
 
     if (tr.tipo === 'sider') ctx.globalAlpha = 0.5;
     
-    const loadSequence = getLoadSequenceMetrics(tr,isCarreta);
     loadSequence.loads.forEach(({ carga, grid, startOffset, mesaStartOffset, pescocoStartOffset, splitCoils }) => {
         const cL = carga.comp * scale;
         const cH = carga.alt * scale;
@@ -3357,24 +3476,27 @@ function drawSide2D(ctx, canvas, tr, pos, isCarreta) {
             const mesaOffset = mesaStartOffset;
             const neckFrontX = startX-neckOffset*scale;
             const mesaFrontX = startX-pL-getDeckTransitionLength(tr)*scale-mesaOffset*scale;
-            const neckY = groundY-pH-cH;
-            const mesaY = groundY-(tr.tipo==='reta'?pH:hT)-cH;
+            const neckBaseY = groundY-pH;
+            const mesaBaseY = groundY-(tr.tipo==='reta'?pH:hT);
 
-            for(let i=0;i<carga.qtd;i++){
+            for(let i=0;i<grid.pecasNaBase;i++){
                 const r=Math.floor(i/grid.maxCols);
                 const rowOffset=r*(coilLength+grid.gap)*scale;
-                drawCargoRect(ctx,neckFrontX-coilLength-rowOffset,neckY,coilLength,cH,carga);
-                drawCargoRect(ctx,mesaFrontX-coilLength-rowOffset,mesaY,coilLength,cH,carga);
+                const stackHeight = cH * getStackCount(carga, i, grid.camadas);
+                drawCargoRect(ctx,neckFrontX-coilLength-rowOffset,neckBaseY-stackHeight,coilLength,stackHeight,carga);
+                drawCargoRect(ctx,mesaFrontX-coilLength-rowOffset,mesaBaseY-stackHeight,coilLength,stackHeight,carga);
             }
             return;
         }
 
-        const cY = (pos === 'pescoco' || tr.tipo === 'reta' || isCarreta ? groundY - pH - cH : groundY - hT - cH);
+        const baseY = (pos === 'pescoco' || tr.tipo === 'reta' || isCarreta ? groundY - pH : groundY - hT);
         const currentX = loadFrontX-startOffset*scale;
         
         for (let r = 0; r < grid.rows; r++) {
             const itemX = currentX - cL - r * (carga.comp + grid.gap) * scale;
-            drawCargoRect(ctx, itemX, cY, cL, cH, carga);
+            const firstBaseIndex = r * grid.maxCols;
+            const rowStackHeight = cH * getStackCount(carga, firstBaseIndex, grid.camadas);
+            drawCargoRect(ctx, itemX, baseY - rowStackHeight, cL, rowStackHeight, carga);
         }
     });
 
@@ -3391,18 +3513,20 @@ function drawRear2D(ctx, canvas, tr, pos, isCarreta) {
     canvas.width = rect.width; canvas.height = rect.height;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    let widestCarga = null;
+    let widestLoad = null;
     let maxW = 0;
-    composicaoCargas.forEach(c => {
-        const grid = getGridMetrics(tr, c, isCarreta);
-        if(grid.totalLarg > maxW) {
-            maxW = grid.totalLarg;
-            widestCarga = c;
+    const loadSequence = getLoadSequenceMetrics(tr, isCarreta);
+    loadSequence.loads.forEach(load => {
+        if(load.grid.totalLarg > maxW) {
+            maxW = load.grid.totalLarg;
+            widestLoad = load;
         }
     });
+    const widestCarga = widestLoad?.carga || null;
+    const widestGrid = widestLoad?.grid || null;
 
     const wTotal = Math.max(tr.w, maxW) + 2; 
-    const hTotal = Math.max(4.5, (tr.tipo === 'reta' || pos === 'pescoco' || isCarreta ? 1.6 : tr.h) + (tr.tipo==='sider'?2.8: (widestCarga?.alt || 0)) + 1);
+    const hTotal = Math.max(4.5, (tr.tipo === 'reta' || pos === 'pescoco' || isCarreta ? 1.6 : tr.h) + (tr.tipo==='sider'?2.8: (widestGrid?.maxStackHeight || 0)) + 1);
     const scale = Math.min((canvas.width - 20) / wTotal, (canvas.height - 20) / hTotal);
     const groundY = canvas.height - 15;
     const centerX = canvas.width / 2;
@@ -3424,18 +3548,17 @@ function drawRear2D(ctx, canvas, tr, pos, isCarreta) {
     }
 
     if (widestCarga) {
-        const grid = getGridMetrics(tr, widestCarga, isCarreta);
+        const grid = widestGrid;
         const cW = widestCarga.larg * scale;
-        const cH = widestCarga.alt * scale;
-        const cY = groundY - tH - cH;
         
-        const firstRowItems = Math.min(grid.maxCols, widestCarga.qtd);
+        const firstRowItems = Math.min(grid.maxCols, grid.pecasNaBase);
         const rowW_Scale = firstRowItems * cW + Math.max(0, firstRowItems - 1) * grid.gap * scale;
         const startX_row = centerX - rowW_Scale / 2;
 
         for (let c = 0; c < firstRowItems; c++) {
             const itemX = startX_row + c * (cW + grid.gap * scale);
-            drawCargoRect(ctx, itemX, cY, cW, cH, widestCarga);
+            const stackHeight = widestCarga.alt * getStackCount(widestCarga, c, grid.camadas) * scale;
+            drawCargoRect(ctx, itemX, groundY - tH - stackHeight, cW, stackHeight, widestCarga);
         }
 
         const limitW = isCarreta && inputs.tampas.value === 'com' && tr.tipo !== 'sider' && tr.tipo !== 'carreta_bau' ? tr.w_util : tr.w;
@@ -3496,6 +3619,7 @@ tipoCargaSelect.addEventListener('change', () => {
 
 els.btnReset.addEventListener('click', () => {
     composicaoCargas = [];
+    inputs.cCamadas.value = '1';
     editingCargaIndex = null;
     atualizarBotaoCarga();
     renderListaCargas();
@@ -3583,15 +3707,24 @@ Object.values(tubeInputs).forEach(input => {
 function setSupabaseStatus(message, isError = false) {
     const status = document.getElementById('supabase_status');
     status.textContent = message;
-    status.className = `mt-1 text-xs ${isError ? 'text-red-700' : 'text-slate-600'}`;
+    status.className = isError ? 'text-xs text-red-700' : 'sr-only';
 }
 
 function setAccountControlsVisible(isSignedIn) {
     document.getElementById('auth_form').classList.toggle('hidden', isSignedIn);
-    document.getElementById('account_actions').classList.toggle('hidden', !isSignedIn);
-    const signedInEmail = document.getElementById('signed_in_email');
-    signedInEmail.classList.toggle('hidden', !isSignedIn);
-    signedInEmail.textContent = isSignedIn ? authenticatedUser.email : '';
+    const accountActions = document.getElementById('account_actions');
+    accountActions.classList.toggle('hidden', !isSignedIn);
+    accountActions.classList.toggle('flex', isSignedIn);
+    const email = authenticatedUser?.email || '';
+    const initials = email.split('@')[0]
+        .split(/[._-]+/)
+        .filter(Boolean)
+        .map(part => part[0])
+        .slice(0, 2)
+        .join('')
+        .toUpperCase() || '?';
+    document.getElementById('account_initials').textContent = initials;
+    document.getElementById('account_initials').title = isSignedIn ? 'Conta conectada' : '';
 }
 
 function setAuthBusy(isBusy) {
@@ -3654,7 +3787,8 @@ function capturePlanState() {
             larg: inputs.cLarg.value,
             alt: inputs.cAlt.value,
             peso: inputs.cPeso.value,
-            qtd: inputs.cQtd.value
+            qtd: inputs.cQtd.value,
+            camadas: inputs.cCamadas.value
         },
         tubes: Object.fromEntries(
             Object.entries(tubeInputs).map(([key, input]) => [key, input.value])
@@ -3691,7 +3825,8 @@ function validatePlanState(state) {
         Number.isFinite(item.larg) && item.larg > 0 &&
         Number.isFinite(item.alt) && item.alt > 0 &&
         Number.isFinite(item.peso) && item.peso >= 0 &&
-        Number.isInteger(item.qtd) && item.qtd > 0
+        Number.isInteger(item.qtd) && item.qtd > 0 &&
+        (item.camadas === undefined || (Number.isInteger(item.camadas) && item.camadas > 0))
     );
     if (!validItems) throw new Error('Este planejamento contém cargas inválidas.');
 }
@@ -3701,7 +3836,7 @@ function restorePlanState(state) {
 
     activeCargaTab = 'cargas';
     cargoTrailerSelectionBeforeTubes = null;
-    composicaoCargas = state.cargo.items.map(item => ({ ...item }));
+    composicaoCargas = state.cargo.items.map(item => ({ ...item, camadas: item.camadas || 1 }));
 
     inputs.cavalinho.value = state.trailer.cavalinho;
     inputs.placa_prancha.value = state.trailer.prancha || '';
@@ -3719,6 +3854,7 @@ function restorePlanState(state) {
     inputs.cAlt.value = state.cargo.alt;
     inputs.cPeso.value = state.cargo.peso;
     inputs.cQtd.value = state.cargo.qtd;
+    inputs.cCamadas.value = state.cargo.camadas || '1';
     divArmador.classList.toggle(
         'hidden',
         !CONTAINER_LOAD_TYPES.has(state.cargo.type) || UNBRANDED_CONTAINER_TYPES.has(state.cargo.type)
