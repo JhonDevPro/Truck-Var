@@ -284,6 +284,7 @@ const inputs = {
     cPeso: document.getElementById('input_carga_peso'),
     cQtd: document.getElementById('input_carga_qtd'), // Lendo a quantidade do HTML
     cCamadas: document.getElementById('input_carga_camadas'),
+    cSobreAnterior: document.getElementById('input_empilhar_anterior'),
     posicao: document.getElementById('input_posicao'),
     tampas: document.getElementById('input_tampas')
 };
@@ -574,6 +575,23 @@ function getStackCount(carga, baseIndex, camadas = Math.max(1, Number.parseInt(c
     return Math.max(0, Math.min(camadas, carga.qtd - baseIndex * camadas));
 }
 
+function applyStackingPositions(loads, allocations) {
+    const loadsByCompositionIndex = new Map();
+    loads.forEach(load => {
+        load.stackBaseHeight = 0;
+        const previousLoad = load.carga.colocarSobreAnterior && allocations[load.compositionIndex - 1] > 0
+            ? loadsByCompositionIndex.get(load.compositionIndex - 1)
+            : null;
+        if (previousLoad) {
+            load.startOffset = previousLoad.startOffset;
+            load.mesaStartOffset = previousLoad.mesaStartOffset ?? previousLoad.startOffset;
+            load.pescocoStartOffset = previousLoad.pescocoStartOffset ?? previousLoad.startOffset;
+            load.stackBaseHeight = previousLoad.stackBaseHeight + previousLoad.grid.maxStackHeight;
+        }
+        loadsByCompositionIndex.set(load.compositionIndex, load);
+    });
+}
+
 function getTubeMetrics(tr) {
     const readNumber = input => {
         const value = Number.parseFloat(input.value);
@@ -717,7 +735,16 @@ function positionLoadAllocations(tr, isCarreta, allocations) {
             carga.qtd === 1 &&
             carga.peso * carga.qtd > tr.cap / 2 &&
             grid.totalComp + grid.gap < tr.mesa / 2;
-        return [{ carga, originalCarga, grid, clearance, splitCoils, coilLength, isConcentrada }];
+        return [{
+            carga,
+            originalCarga,
+            compositionIndex: index,
+            grid,
+            clearance,
+            splitCoils,
+            coilLength,
+            isConcentrada
+        }];
     });
 
     if (isCarreta) {
@@ -726,11 +753,25 @@ function positionLoadAllocations(tr, isCarreta, allocations) {
             distributedLoads.forEach(load => {
                 load.startOffset = 0;
             });
+            const positionedLoadsByIndex = new Map(
+                distributedLoads.map(load => [load.compositionIndex, load])
+            );
             let normalOffset = tr.mesa;
             loads.filter(load => !load.grid.isDistributed).forEach(load => {
+                const previousLoad = load.carga.colocarSobreAnterior &&
+                    allocations[load.compositionIndex - 1] > 0
+                    ? positionedLoadsByIndex.get(load.compositionIndex - 1)
+                    : null;
+                if (previousLoad) {
+                    load.startOffset = previousLoad.startOffset;
+                    positionedLoadsByIndex.set(load.compositionIndex, load);
+                    return;
+                }
                 load.startOffset = normalOffset;
                 normalOffset += load.grid.totalComp + load.grid.gap;
+                positionedLoadsByIndex.set(load.compositionIndex, load);
             });
+            applyStackingPositions(loads, allocations);
             const mesaComp = loads.reduce(
                 (maxEnd, load) => Math.max(maxEnd, load.startOffset + load.grid.totalComp),
                 0
@@ -748,11 +789,26 @@ function positionLoadAllocations(tr, isCarreta, allocations) {
         let concentratedEnd = 0;
         let concentratedStart = 0;
         let concentratedCursor = 0;
+        const concentratedPositionsByIndex = new Map();
+        let lastConcentratedGap = 0;
         if (concentratedLoads.length) {
-            concentratedLoads.forEach((load, index) => {
-                if (index > 0) concentratedCursor += concentratedLoads[index - 1].grid.gap;
+            concentratedLoads.forEach(load => {
+                const previousLoad = load.carga.colocarSobreAnterior &&
+                    allocations[load.compositionIndex - 1] > 0
+                    ? concentratedPositionsByIndex.get(load.compositionIndex - 1)
+                    : null;
+                if (previousLoad) {
+                    load.startOffset = previousLoad.startOffset;
+                    concentratedPositionsByIndex.set(load.compositionIndex, load);
+                    return;
+                }
+                if (concentratedPositionsByIndex.size > 0) {
+                    concentratedCursor += lastConcentratedGap;
+                }
                 load.startOffset = concentratedCursor;
                 concentratedCursor += load.grid.totalComp;
+                lastConcentratedGap = load.grid.gap;
+                concentratedPositionsByIndex.set(load.compositionIndex, load);
             });
             const concentratedLength = concentratedCursor;
             const axleLayout = getCarretaAxleLayout(tr);
@@ -769,19 +825,30 @@ function positionLoadAllocations(tr, isCarreta, allocations) {
             concentratedEnd = concentratedStart + concentratedLength;
         }
 
+        const positionedLoadsByIndex = new Map(
+            concentratedLoads.map(load => [load.compositionIndex, load])
+        );
         let normalFrontOffset = 0;
         let normalRearOffset = concentratedEnd;
-        let normalRearGap = concentratedLoads.length
-            ? concentratedLoads[concentratedLoads.length - 1].grid.gap
-            : 0;
+        let normalRearGap = concentratedLoads.length ? lastConcentratedGap : 0;
         let rearQueueStarted = false;
         loads.filter(load => !load.isConcentrada).forEach(load => {
+            const previousLoad = load.carga.colocarSobreAnterior &&
+                allocations[load.compositionIndex - 1] > 0
+                ? positionedLoadsByIndex.get(load.compositionIndex - 1)
+                : null;
+            if (previousLoad) {
+                load.startOffset = previousLoad.startOffset;
+                positionedLoadsByIndex.set(load.compositionIndex, load);
+                return;
+            }
             const candidateStartOffset = Math.max(normalFrontOffset, load.clearance);
             const fitsBeforeConcentrated = !concentratedLoads.length ||
                 (candidateStartOffset + load.grid.totalComp + load.grid.gap <= concentratedStart);
             if (!rearQueueStarted && fitsBeforeConcentrated) {
                 load.startOffset = candidateStartOffset;
                 normalFrontOffset = candidateStartOffset + load.grid.totalComp + load.grid.gap;
+                positionedLoadsByIndex.set(load.compositionIndex, load);
                 return;
             }
 
@@ -789,8 +856,10 @@ function positionLoadAllocations(tr, isCarreta, allocations) {
             load.startOffset = normalRearOffset + normalRearGap;
             normalRearOffset = load.startOffset + load.grid.totalComp;
             normalRearGap = load.grid.gap;
+            positionedLoadsByIndex.set(load.compositionIndex, load);
         });
 
+        applyStackingPositions(loads, allocations);
         const mesaComp = loads.reduce(
             (maxEnd, load) => Math.max(maxEnd, load.startOffset + load.grid.totalComp),
             0
@@ -800,9 +869,35 @@ function positionLoadAllocations(tr, isCarreta, allocations) {
 
     let mesaEnd = 0;
     let pescocoEnd = 0;
+    const positionedLoadsByIndex = new Map();
     loads.forEach(load => {
         const { grid, clearance, splitCoils } = load;
         const gap = grid.gap;
+        const previousLoad = load.carga.colocarSobreAnterior && allocations[load.compositionIndex - 1] > 0
+            ? positionedLoadsByIndex.get(load.compositionIndex - 1)
+            : null;
+        if (previousLoad) {
+            load.startOffset = previousLoad.startOffset;
+            load.stackBaseHeight = previousLoad.stackBaseHeight + previousLoad.grid.maxStackHeight;
+            if (splitCoils) {
+                load.mesaStartOffset = previousLoad.mesaStartOffset ?? previousLoad.startOffset;
+                load.pescocoStartOffset = previousLoad.pescocoStartOffset ?? previousLoad.startOffset;
+                mesaEnd = Math.max(mesaEnd, load.mesaStartOffset + grid.totalComp);
+                pescocoEnd = Math.max(pescocoEnd, load.pescocoStartOffset + grid.totalComp);
+            } else {
+                load.inPescoco = previousLoad.splitCoils
+                    ? pos === 'pescoco'
+                    : previousLoad.inPescoco;
+                if (load.inPescoco) {
+                    pescocoEnd = Math.max(pescocoEnd, load.startOffset + grid.totalComp);
+                } else {
+                    mesaEnd = Math.max(mesaEnd, load.startOffset + grid.totalComp);
+                }
+            }
+            positionedLoadsByIndex.set(load.compositionIndex, load);
+            return;
+        }
+        load.stackBaseHeight = 0;
         if (splitCoils) {
             const mesaStartOffset = Math.max(mesaOffset, clearance);
             const pescocoStartOffset = Math.max(pescocoOffset, clearance);
@@ -815,10 +910,12 @@ function positionLoadAllocations(tr, isCarreta, allocations) {
                 mesaStartOffset,
                 pescocoStartOffset
             });
+            positionedLoadsByIndex.set(load.compositionIndex, load);
             return;
         }
 
         const inPescoco = !isCarreta && pos === 'pescoco';
+        load.inPescoco = inPescoco;
         const startOffset = Math.max(inPescoco ? pescocoOffset : mesaOffset, clearance);
         if (inPescoco) {
             pescocoOffset = startOffset + grid.totalComp + gap;
@@ -828,6 +925,7 @@ function positionLoadAllocations(tr, isCarreta, allocations) {
             mesaEnd = Math.max(mesaEnd, startOffset + grid.totalComp);
         }
         Object.assign(load, { startOffset });
+        positionedLoadsByIndex.set(load.compositionIndex, load);
     });
 
     return {
@@ -901,7 +999,7 @@ function renderListaCargas() {
         editButton.setAttribute('aria-label', `Editar ${carga.qtd} ${typeLabel}`);
         editButton.innerHTML = `
             <span class="font-bold text-slate-700">${carga.qtd}x ${typeLabel}</span>
-            <span class="text-slate-500">${carga.comp.toFixed(1)}m x ${carga.larg.toFixed(1)}m x ${carga.alt.toFixed(1)}m &bull; ${carga.camadas || 1} camada(s) &bull; ${carga.peso}t/unid</span>
+            <span class="text-slate-500">${carga.comp.toFixed(1)}m x ${carga.larg.toFixed(1)}m x ${carga.alt.toFixed(1)}m &bull; ${carga.camadas || 1} camada(s)${carga.colocarSobreAnterior ? ' &bull; sobre a anterior' : ''} &bull; ${carga.peso}t/unid</span>
         `;
         editButton.addEventListener('click', () => editarCarga(index));
 
@@ -943,6 +1041,7 @@ function editarCarga(index) {
     inputs.cPeso.value = carga.peso;
     inputs.cQtd.value = carga.qtd;
     inputs.cCamadas.value = carga.camadas || 1;
+    inputs.cSobreAnterior.checked = carga.colocarSobreAnterior === true;
     inputArmador.value = carga.armador || 'generico';
     atualizarBotaoCarga();
     renderListaCargas();
@@ -968,10 +1067,11 @@ els.btnAdicionar.addEventListener('click', () => {
     const peso = parseFloat(inputs.cPeso.value) || 0;
     const qtd = parseInt(inputs.cQtd.value) || 1; // Quantidade de peças deste bloco
     const camadas = Math.max(1, Number.parseInt(inputs.cCamadas.value, 10) || 1);
+    const colocarSobreAnterior = inputs.cSobreAnterior.checked;
     const type = document.getElementById('input_tipo_carga').value;
     const armador = document.getElementById('input_armador').value;
 
-    const cargaAtualizada = { comp, larg, alt, peso, type, armador, qtd, camadas };
+    const cargaAtualizada = { comp, larg, alt, peso, type, armador, qtd, camadas, colocarSobreAnterior };
     if (editingCargaIndex === null) {
         composicaoCargas.push(cargaAtualizada);
     } else {
@@ -1286,10 +1386,10 @@ function analyzeAndDraw() {
     const loadSequence = getLoadSequenceMetrics(tr, isCarreta);
     const compTotalUsado = loadSequence.totalComp;
 
-    loadSequence.loads.forEach(({ carga, grid }) => {
+    loadSequence.loads.forEach(({ carga, grid, stackBaseHeight }) => {
         pesoTotal += (carga.peso * carga.qtd);
         if (grid.totalLarg > totalLargMax) totalLargMax = grid.totalLarg;
-        if (grid.maxStackHeight > maxAlt) maxAlt = grid.maxStackHeight;
+        maxAlt = Math.max(maxAlt, stackBaseHeight + grid.maxStackHeight);
     });
     renderCargoAnalysisSummary(loadSequence, pesoTotal);
     spilloverAlert.classList.toggle('hidden', cargasTransbordo.length === 0);
@@ -2261,12 +2361,13 @@ function draw3D(tr, pos, isCarreta) {
         ? { loads: [] }
         : getLoadSequenceMetrics(tr,isCarreta);
 
-    loadSequence.loads.forEach(({ carga, grid, startOffset, mesaStartOffset, pescocoStartOffset, splitCoils }) => {
+    loadSequence.loads.forEach(({ carga, grid, startOffset, mesaStartOffset, pescocoStartOffset, splitCoils, stackBaseHeight }) => {
         const cW = Math.max(.1, carga.larg) * S;
         const cH = Math.max(.1, carga.alt) * S;
         const cL = Math.max(.1, carga.comp) * S;
         
-        const loadY = (pos === 'pescoco' || tr.tipo === 'reta' ? pH : (isCarreta ? deckY : hT)) + cH/2;
+        const loadY = (pos === 'pescoco' || tr.tipo === 'reta' ? pH : (isCarreta ? deckY : hT)) +
+            stackBaseHeight * S + cH/2;
         const loadZ_start = loadFrontZ-startOffset*S;
         
         // O group base será montado apenas uma vez com o visual do tipo escolhido
@@ -2900,8 +3001,8 @@ function draw3D(tr, pos, isCarreta) {
             const mesaOffset = mesaStartOffset;
             const neckFrontZ = shiftZ-neckOffset*S;
             const mesaFrontZ = shiftZ-pL-getDeckTransitionLength(tr)*S-mesaOffset*S;
-            const neckY = pH+cH/2;
-            const mesaY = (tr.tipo==='reta'?pH:hT)+cH/2;
+            const neckY = pH+stackBaseHeight*S+cH/2;
+            const mesaY = (tr.tipo==='reta'?pH:hT)+stackBaseHeight*S+cH/2;
 
             for(let i=0;i<grid.pecasNaBase;i++){
                 const r=Math.floor(i/grid.maxCols);
@@ -3411,8 +3512,8 @@ function drawSide2D(ctx, canvas, tr, pos, isCarreta) {
     const bridgeL = 3.5;
     let maxCargaH = 0;
     const loadSequence = getLoadSequenceMetrics(tr, isCarreta);
-    loadSequence.loads.forEach(({ grid }) => {
-        maxCargaH = Math.max(maxCargaH, grid.maxStackHeight);
+    loadSequence.loads.forEach(({ grid, stackBaseHeight }) => {
+        maxCargaH = Math.max(maxCargaH, stackBaseHeight + grid.maxStackHeight);
     });
     
     const trailerSpan = isCarreta
@@ -3467,7 +3568,7 @@ function drawSide2D(ctx, canvas, tr, pos, isCarreta) {
 
     if (tr.tipo === 'sider') ctx.globalAlpha = 0.5;
     
-    loadSequence.loads.forEach(({ carga, grid, startOffset, mesaStartOffset, pescocoStartOffset, splitCoils }) => {
+    loadSequence.loads.forEach(({ carga, grid, startOffset, mesaStartOffset, pescocoStartOffset, splitCoils, stackBaseHeight }) => {
         const cL = carga.comp * scale;
         const cH = carga.alt * scale;
         if (splitCoils) {
@@ -3476,8 +3577,8 @@ function drawSide2D(ctx, canvas, tr, pos, isCarreta) {
             const mesaOffset = mesaStartOffset;
             const neckFrontX = startX-neckOffset*scale;
             const mesaFrontX = startX-pL-getDeckTransitionLength(tr)*scale-mesaOffset*scale;
-            const neckBaseY = groundY-pH;
-            const mesaBaseY = groundY-(tr.tipo==='reta'?pH:hT);
+            const neckBaseY = groundY-pH-stackBaseHeight*scale;
+            const mesaBaseY = groundY-(tr.tipo==='reta'?pH:hT)-stackBaseHeight*scale;
 
             for(let i=0;i<grid.pecasNaBase;i++){
                 const r=Math.floor(i/grid.maxCols);
@@ -3489,7 +3590,8 @@ function drawSide2D(ctx, canvas, tr, pos, isCarreta) {
             return;
         }
 
-        const baseY = (pos === 'pescoco' || tr.tipo === 'reta' || isCarreta ? groundY - pH : groundY - hT);
+        const baseY = (pos === 'pescoco' || tr.tipo === 'reta' || isCarreta ? groundY - pH : groundY - hT) -
+            stackBaseHeight * scale;
         const currentX = loadFrontX-startOffset*scale;
         
         for (let r = 0; r < grid.rows; r++) {
@@ -3513,20 +3615,16 @@ function drawRear2D(ctx, canvas, tr, pos, isCarreta) {
     canvas.width = rect.width; canvas.height = rect.height;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    let widestLoad = null;
     let maxW = 0;
     const loadSequence = getLoadSequenceMetrics(tr, isCarreta);
-    loadSequence.loads.forEach(load => {
-        if(load.grid.totalLarg > maxW) {
-            maxW = load.grid.totalLarg;
-            widestLoad = load;
-        }
+    let maxLoadHeight = 0;
+    loadSequence.loads.forEach(({ grid, stackBaseHeight }) => {
+        maxW = Math.max(maxW, grid.totalLarg);
+        maxLoadHeight = Math.max(maxLoadHeight, stackBaseHeight + grid.maxStackHeight);
     });
-    const widestCarga = widestLoad?.carga || null;
-    const widestGrid = widestLoad?.grid || null;
 
     const wTotal = Math.max(tr.w, maxW) + 2; 
-    const hTotal = Math.max(4.5, (tr.tipo === 'reta' || pos === 'pescoco' || isCarreta ? 1.6 : tr.h) + (tr.tipo==='sider'?2.8: (widestGrid?.maxStackHeight || 0)) + 1);
+    const hTotal = Math.max(4.5, (tr.tipo === 'reta' || pos === 'pescoco' || isCarreta ? 1.6 : tr.h) + (tr.tipo==='sider'?2.8: maxLoadHeight) + 1);
     const scale = Math.min((canvas.width - 20) / wTotal, (canvas.height - 20) / hTotal);
     const groundY = canvas.height - 15;
     const centerX = canvas.width / 2;
@@ -3547,29 +3645,34 @@ function drawRear2D(ctx, canvas, tr, pos, isCarreta) {
         ctx.fillRect(centerX-tW*0.46+i*reflectorWidth,groundY-0.66*scale,reflectorWidth,0.14*scale);
     }
 
-    if (widestCarga) {
-        const grid = widestGrid;
-        const cW = widestCarga.larg * scale;
-        
+    loadSequence.loads.forEach(({ carga, grid, stackBaseHeight }) => {
+        const cW = carga.larg * scale;
         const firstRowItems = Math.min(grid.maxCols, grid.pecasNaBase);
         const rowW_Scale = firstRowItems * cW + Math.max(0, firstRowItems - 1) * grid.gap * scale;
         const startX_row = centerX - rowW_Scale / 2;
 
         for (let c = 0; c < firstRowItems; c++) {
             const itemX = startX_row + c * (cW + grid.gap * scale);
-            const stackHeight = widestCarga.alt * getStackCount(widestCarga, c, grid.camadas) * scale;
-            drawCargoRect(ctx, itemX, groundY - tH - stackHeight, cW, stackHeight, widestCarga);
+            const stackHeight = carga.alt * getStackCount(carga, c, grid.camadas) * scale;
+            drawCargoRect(
+                ctx,
+                itemX,
+                groundY - tH - (stackBaseHeight * scale) - stackHeight,
+                cW,
+                stackHeight,
+                carga
+            );
         }
+    });
 
-        const limitW = isCarreta && inputs.tampas.value === 'com' && tr.tipo !== 'sider' && tr.tipo !== 'carreta_bau' ? tr.w_util : tr.w;
-        if (maxW > limitW) {
-            const excW = limitW * scale;
-            const cW_max = maxW * scale;
-            ctx.fillStyle = '#ef4444'; ctx.font = 'bold 10px Arial';
-            ctx.beginPath(); ctx.moveTo(centerX - cW_max/2, groundY - tH - 10); ctx.lineTo(centerX - excW/2, groundY - tH - 10); ctx.stroke();
-            ctx.fillText('Exc', centerX - cW_max/2 + 2, groundY - tH - 15);
-            ctx.beginPath(); ctx.moveTo(centerX + excW/2, groundY - tH - 10); ctx.lineTo(centerX + cW_max/2, groundY - tH - 10); ctx.stroke();
-        }
+    const limitW = isCarreta && inputs.tampas.value === 'com' && tr.tipo !== 'sider' && tr.tipo !== 'carreta_bau' ? tr.w_util : tr.w;
+    if (maxW > limitW) {
+        const excW = limitW * scale;
+        const cW_max = maxW * scale;
+        ctx.fillStyle = '#ef4444'; ctx.font = 'bold 10px Arial';
+        ctx.beginPath(); ctx.moveTo(centerX - cW_max/2, groundY - tH - 10); ctx.lineTo(centerX - excW/2, groundY - tH - 10); ctx.stroke();
+        ctx.fillText('Exc', centerX - cW_max/2 + 2, groundY - tH - 15);
+        ctx.beginPath(); ctx.moveTo(centerX + excW/2, groundY - tH - 10); ctx.lineTo(centerX + cW_max/2, groundY - tH - 10); ctx.stroke();
     }
 }
 
@@ -3620,6 +3723,7 @@ tipoCargaSelect.addEventListener('change', () => {
 els.btnReset.addEventListener('click', () => {
     composicaoCargas = [];
     inputs.cCamadas.value = '1';
+    inputs.cSobreAnterior.checked = false;
     editingCargaIndex = null;
     atualizarBotaoCarga();
     renderListaCargas();
@@ -3788,7 +3892,8 @@ function capturePlanState() {
             alt: inputs.cAlt.value,
             peso: inputs.cPeso.value,
             qtd: inputs.cQtd.value,
-            camadas: inputs.cCamadas.value
+            camadas: inputs.cCamadas.value,
+            colocarSobreAnterior: inputs.cSobreAnterior.checked
         },
         tubes: Object.fromEntries(
             Object.entries(tubeInputs).map(([key, input]) => [key, input.value])
@@ -3826,7 +3931,8 @@ function validatePlanState(state) {
         Number.isFinite(item.alt) && item.alt > 0 &&
         Number.isFinite(item.peso) && item.peso >= 0 &&
         Number.isInteger(item.qtd) && item.qtd > 0 &&
-        (item.camadas === undefined || (Number.isInteger(item.camadas) && item.camadas > 0))
+        (item.camadas === undefined || (Number.isInteger(item.camadas) && item.camadas > 0)) &&
+        (item.colocarSobreAnterior === undefined || typeof item.colocarSobreAnterior === 'boolean')
     );
     if (!validItems) throw new Error('Este planejamento contém cargas inválidas.');
 }
@@ -3836,7 +3942,11 @@ function restorePlanState(state) {
 
     activeCargaTab = 'cargas';
     cargoTrailerSelectionBeforeTubes = null;
-    composicaoCargas = state.cargo.items.map(item => ({ ...item, camadas: item.camadas || 1 }));
+    composicaoCargas = state.cargo.items.map(item => ({
+        ...item,
+        camadas: item.camadas || 1,
+        colocarSobreAnterior: item.colocarSobreAnterior === true
+    }));
 
     inputs.cavalinho.value = state.trailer.cavalinho;
     inputs.placa_prancha.value = state.trailer.prancha || '';
@@ -3855,6 +3965,7 @@ function restorePlanState(state) {
     inputs.cPeso.value = state.cargo.peso;
     inputs.cQtd.value = state.cargo.qtd;
     inputs.cCamadas.value = state.cargo.camadas || '1';
+    inputs.cSobreAnterior.checked = state.cargo.colocarSobreAnterior === true;
     divArmador.classList.toggle(
         'hidden',
         !CONTAINER_LOAD_TYPES.has(state.cargo.type) || UNBRANDED_CONTAINER_TYPES.has(state.cargo.type)
