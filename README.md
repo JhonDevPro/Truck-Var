@@ -38,7 +38,7 @@ Para executar a API no Windows:
 
 1. Instale o Python 3 pelo [site oficial](https://www.python.org/downloads/). Durante a instalação, marque **Add python.exe to PATH**. O atalho da Microsoft Store não substitui a instalação.
 2. Feche e reabra o VS Code após instalar o Python.
-3. Execute `iniciar_ia.bat` na raiz do projeto. Na primeira vez, ele instala as dependências e solicita a chave Gemini sem exibi-la na tela.
+3. Execute `iniciar_ia.bat` na raiz do projeto. Na primeira vez, ele instala as dependências; se `GEMINI_API_KEY` não estiver definida no ambiente, solicitará a chave sem exibi-la na tela. A chave é usada somente pelo processo da API e não é salva em arquivo.
 4. Mantenha a janela aberta enquanto usa a importação. Abra `http://127.0.0.1:8000/health`; a resposta esperada é `{"status":"ok"}`.
 
-A extração depende de conexão com a API do Google Gemini; confira os dados reconhecidos antes de usar o planejamento. Não grave a chave Gemini no `.bat` nem no repositório.
+A extração depende de conexão com a API do Google Gemini; confira os dados reconhecidos antes de usar o planejamento. Não grave a chave Gemini no `.bat` nem no repositório. Se uma chave já foi incluída ou compartilhada, revogue-a no Google AI Studio e crie uma nova.
