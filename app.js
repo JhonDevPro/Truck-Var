@@ -2088,6 +2088,18 @@ function draw3D(tr, pos, isCarreta) {
                         material.emissiveIntensity = 0.8;
                         if ('metalness' in material) material.metalness = 0.05;
                         if ('roughness' in material) material.roughness = 0.5;
+                    } else if (cabModelId === 'scania_s_730' && /^logo_scania(?:\.\d+)?$/.test(sourceMaterialName)) {
+                        material.color.setHex(0xf2f4f6);
+                        material.emissive = new THREE.Color(0x626870);
+                        material.emissiveIntensity = 0.35;
+                        if ('metalness' in material) material.metalness = 0.75;
+                        if ('roughness' in material) material.roughness = 0.22;
+                    } else if (cabModelId === 'scania_s_730' && /^preto_scania(?:\.\d+)?$/.test(sourceMaterialName)) {
+                        material.color.setHex(0x55595e);
+                        material.emissive = new THREE.Color(0x14171a);
+                        material.emissiveIntensity = 0.15;
+                        if ('metalness' in material) material.metalness = 0.18;
+                        if ('roughness' in material) material.roughness = 0.58;
                     } else if (cabModelId === 'scania_s_730' && /^prata(?:\.\d+)?$/.test(sourceMaterialName)) {
                         material.color.setHex(0x9ca3af);
                         material.emissive = new THREE.Color(0x252a30);
@@ -2146,6 +2158,16 @@ function draw3D(tr, pos, isCarreta) {
                     ? updatedMaterials
                     : updatedMaterials[0];
             });
+
+            if (cabModelId === 'scania_s_730') {
+                const cabinLight = new THREE.PointLight(0xfff4e8, 2.5, 8, 2);
+                cabinLight.position.set(
+                    0,
+                    bounds.min.y + size.y * 0.66,
+                    bounds.max.z - size.z * 0.28
+                );
+                object.add(cabinLight);
+            }
         }
 
         if (drawRevision === draw3DRevision) {
