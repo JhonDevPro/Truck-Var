@@ -6,6 +6,10 @@ const bdVeiculos = {
     "prancha_reta_12_5": { tipo: "reta", w: 3.20, h: 1.20, pescoco: 3.60, mesa: 12.55, compTotal: 18.00, eixos: 3, cap: 40 },
     "prancha_semi_3_9": { tipo: "semi-rebaixada", w: 3.00, h: 0.80, pescoco: 3.65, mesa: 3.95, compTotal: 13.50, eixos: 3, cap: 35 },
     "prancha_reb_4_11_3": { tipo: "rebaixada", w: 3.00, h: 0.90, pescoco: 3.70, mesa: 11.30, compTotal: 19.00, eixos: 4, cap: 60 },
+    // --- NOVAS PRANCHAS REGISTADAS ---
+    "prancha_step_3_eixos": { tipo: "rebaixada", w: 3.20, h: 0.90, pescoco: 3.60, transicao: 1.20, mesa: 7.00, areaCargaTotal: 10.00, compTotal: 15.50, eixos: 3, cap: 45 },
+    "prancha_step_4_eixos": { tipo: "rebaixada", w: 3.20, h: 0.90, pescoco: 3.70, transicao: 1.20, mesa: 7.00, areaCargaTotal: 11.00, compTotal: 17.00, eixos: 4, cap: 60 },
+    "prancha_lagartixa": { tipo: "rebaixada", w: 3.00, h: 0.50, pescoco: 3.80, mesa: 14.00, compTotal: 20.00, eixos: 3, cap: 45 },
     
     "carreta_ext": { tipo: "carreta_ext", w: 2.50, w_util: 2.44, h: 1.50, pescoco: 0, mesa: 15.00, compTotal: 15.00, eixos: 3, cap: 25 },
     "carreta_bau_15": { tipo: "carreta_bau", w: 2.50, w_util: 2.44, h: 1.50, pescoco: 0, mesa: 15.00, compTotal: 15.00, eixos: 3, cap: 25 },
