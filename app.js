@@ -15,8 +15,30 @@ const bdVeiculos = {
     "carreta_bau_15": { tipo: "carreta_bau", w: 2.50, w_util: 2.44, h: 1.50, pescoco: 0, mesa: 15.00, compTotal: 15.00, eixos: 3, cap: 25 },
     "carreta_padrao": { tipo: "carreta", w: 2.50, w_util: 2.44, h: 1.50, pescoco: 0, mesa: 14.00, compTotal: 14.00, eixos: 3, cap: 25 },
     "carreta_vand": { tipo: "vanderleia", w: 2.50, w_util: 2.44, h: 1.50, pescoco: 0, mesa: 14.00, compTotal: 14.00, eixos: 3, cap: 30 },
-    "carreta_sider": { tipo: "sider", w: 2.50, w_util: 2.44, h: 1.50, pescoco: 0, mesa: 14.00, compTotal: 14.00, eixos: 3, cap: 25 }
+    "carreta_sider": { tipo: "sider", w: 2.50, w_util: 2.44, h: 1.50, pescoco: 0, mesa: 14.00, compTotal: 14.00, eixos: 3, cap: 25 },
+
+    // --- CAMINHÕES (carroceria própria, sem cavalinho) ---
+    // w = largura externa (interna + 3 cm de cada lado), w_util = largura interna entre as tampas.
+    // mesa = comprimento real do piso: o informado + 20 cm de folga para as cargas.
+    // paredesFixas = a lateral já faz parte do modelo 3D (sem tampas opcionais).
+    // cabL/cabH/rearAxles/wheelR só servem para o desenho do perfil lateral 2D.
+    "caminhao_truck": { tipo: "caminhao", grupo: "Truck", nome: "Truck", modelo: "truck", w: 2.50, w_util: 2.44, h: 1.50, pescoco: 0, mesa: 8.20, eixos: 3, cap: 12, cabL: 2.3, cabH: 3.3, rearAxles: 2, wheelR: 0.52 },
+    "caminhao_toco": { tipo: "caminhao", grupo: "Toco", nome: "Toco", modelo: "toco", w: 2.50, w_util: 2.44, h: 1.50, pescoco: 0, mesa: 6.20, eixos: 2, cap: 8, cabL: 2.0, cabH: 3.1, rearAxles: 1, wheelR: 0.52 },
+    "caminhao_vuc_chevrolet": { tipo: "caminhao", grupo: "VUC", nome: "VUC F350 Chevrolet", modelo: "vuc_chevrolet", paredesFixas: true, w: 2.06, w_util: 2.00, h: 1.10, pescoco: 0, mesa: 4.20, eixos: 2, cap: 1, cabL: 1.9, cabH: 2.6, rearAxles: 1, wheelR: 0.45 },
+    "caminhao_vuc_honda": { tipo: "caminhao", grupo: "VUC", nome: "VUC F350 Honda", modelo: "vuc_honda", paredesFixas: true, w: 2.06, w_util: 2.00, h: 1.10, pescoco: 0, mesa: 4.20, eixos: 2, cap: 1, cabL: 1.9, cabH: 2.4, rearAxles: 1, wheelR: 0.45 },
+    "caminhao_vuc_mercedes": { tipo: "caminhao", grupo: "VUC", nome: "VUC F350 Mercedes-Benz", modelo: "vuc_mercedes", paredesFixas: true, w: 2.06, w_util: 2.00, h: 1.10, pescoco: 0, mesa: 4.20, eixos: 2, cap: 1, cabL: 2.2, cabH: 2.5, rearAxles: 1, wheelR: 0.45 },
+    "caminhao_saveiro": { tipo: "caminhao", grupo: "Utilitário", nome: "Utilitário Saveiro", modelo: "saveiro", paredesFixas: true, w: 1.06, w_util: 1.00, h: 0.80, pescoco: 0, mesa: 1.80, eixos: 2, cap: 0.4, cabL: 1.9, cabH: 1.4, rearAxles: 1, wheelR: 0.36 }
 };
+
+function isMesaOnlyVehicle(tr) {
+    return tr.tipo.includes('carreta') || tr.tipo === 'vanderleia' || tr.tipo === 'sider' || tr.tipo === 'caminhao';
+}
+
+// Com tampas (ou paredes fixas do modelo) a carga só usa a largura interna.
+function usesSideGates(tr, isCarreta) {
+    if (tr.tipo === 'caminhao') return tr.paredesFixas === true || inputs.tampas.value === 'com';
+    return isCarreta && inputs.tampas.value === 'com' && tr.tipo !== 'sider' && tr.tipo !== 'carreta_bau';
+}
 
 const CAB_MODELS = {
     semi_obj: { format: 'obj' },
@@ -53,6 +75,102 @@ const CAB_MODELS = {
         grayMeshNames: ['Object_56', 'Object_83', 'Object_125'],
         whiteMeshNames: ['Object_30', 'Object_58'],
         frontGrilleColor: 0x383c42 // Tom grafite/chumbo escuro para a grade frontal
+    }
+};
+
+const VEHICLE_BODY_WHITE = 0xf2f2f0;
+const VEHICLE_DETAIL_GRAY = 0x383c42;
+
+// Medidas em metros no sistema original do modelo já girado (frente = +Z):
+// bed = carroceria de carga, wheels = eixos (posição Z e raio do pneu).
+// Cada modelo é remodelado em buildRigidVehicle para casar com as medidas de bdVeiculos.
+const RIGID_VEHICLE_MODELS = {
+    truck: {
+        url: './caminhões/Truck (2).glb',
+        compressedUrl: './modelos/truck.glb.gz',
+        rotationY: Math.PI / 2,
+        unit: 1,
+        groundY: 0.01,
+        bed: { front: 1.57, rear: -6.73, width: 2.60, floor: 1.67, floorWidth: 2.48, centerX: 0 },
+        wheels: { z: [3.49, -3.75, -5.15], radius: 0.585, innerX: 0.6 },
+        cabLight: { x: 0, y: 3.1, z: 1.9 },
+        paints: [
+            { match: /ruby_red/i, color: VEHICLE_BODY_WHITE },
+            { match: /Independent_bed_paint/i, color: VEHICLE_DETAIL_GRAY },
+            { match: /facade/i, color: VEHICLE_BODY_WHITE, recolorTexture: true }
+        ],
+        interior: /Cab_upholstery|Dashboard_illuminated_display|LED_white|Ruby_seat_stitching/i
+    },
+    toco: {
+        url: './caminhões/Toco (2).glb',
+        compressedUrl: './modelos/toco.glb.gz',
+        rotationY: Math.PI / 2,
+        unit: 1,
+        groundY: 0.01,
+        bed: { front: 1.98, rear: -2.86, width: 2.08, floor: 1.47, floorWidth: 1.98, centerX: 0 },
+        wheels: { z: [3.07, -1.47], radius: 0.515, innerX: 0.55 },
+        cabLight: { x: 0, y: 2.65, z: 1.3 },
+        paints: [
+            { match: /ruby_red/i, color: VEHICLE_BODY_WHITE },
+            { match: /Independent_bed_paint/i, color: VEHICLE_DETAIL_GRAY },
+            { match: /facade/i, color: VEHICLE_BODY_WHITE, recolorTexture: true }
+        ],
+        interior: /Cab_upholstery|Dashboard_illuminated_display|LED_white|Ruby_seat_stitching/i
+    },
+    vuc_chevrolet: {
+        url: './caminhões/F350-chevrolet.glb',
+        compressedUrl: './modelos/vuc-chevrolet.glb.gz',
+        rotationY: 0,
+        unit: 0.01,
+        groundY: 0.0017,
+        bed: { front: 1.46, rear: -3.78, width: 2.58, floor: 1.182, centerX: -0.01 },
+        wheels: { z: [2.35, -2.74], radius: 0.48, innerX: 0.85 },
+        cabLight: { x: 0, y: 2.2, z: 0.94 },
+        brighten: true,
+        paints: []
+    },
+    vuc_honda: {
+        url: './caminhões/F350-honda_acty.glb',
+        compressedUrl: './modelos/vuc-honda.glb.gz',
+        rotationY: 0,
+        unit: 1,
+        preScale: 1.5,
+        groundY: 0.002,
+        bed: { front: 0.25, rear: -1.60, width: 1.36, floor: 0.573, centerX: 0 },
+        wheels: { z: [0.54, -1.34], radius: 0.25, innerX: 0.5 },
+        cabLight: { x: 0, y: 1.3, z: 0.53 },
+        brighten: true,
+        paints: []
+    },
+    vuc_mercedes: {
+        url: './caminhões/F350-mercedes-benz.glb',
+        compressedUrl: './modelos/vuc-mercedes.glb.gz',
+        rotationY: Math.PI,
+        unit: 1,
+        preScale: 1.0,
+        groundY: 0,
+        bed: { front: 3.49, rear: 0.28, width: 2.106, floor: 0.80, centerX: -1.142 },
+        wheels: { z: [4.80, 1.40], radius: 0.40, innerX: 0.8 },
+        cabLight: { x: 0, y: 1.65, z: 0.71 },
+        paints: [
+            { match: /OrangeRed/i, color: VEHICLE_BODY_WHITE }
+        ]
+    },
+    saveiro: {
+        url: './caminhões/saveiro.glb',
+        compressedUrl: './modelos/saveiro.glb.gz',
+        rotationY: 0,
+        unit: 1,
+        preScale: 1.1,
+        bed: { front: -0.53, rear: -1.857, width: 1.04, floor: 0.566, centerX: 0 },
+        wheels: { z: [1.53, -0.48], radius: 0.26, innerX: 0.38, scale: 1.1, offsetY: 0.033 },
+        cabLight: { x: 0, y: 0.98, z: 0.43 },
+        paints: [
+            { match: /BODYPAINT/i, color: VEHICLE_BODY_WHITE, metalness: 0.05, roughness: 0.68 },
+            { match: /^METAL$/i, color: VEHICLE_DETAIL_GRAY }
+        ],
+        bedFloorColor: 0x202124,
+        groundY: 0
     }
 };
 
@@ -271,7 +389,8 @@ const UNBRANDED_CONTAINER_TYPES = new Set([
 ]);
 const LOCKED_LOAD_TYPES = new Set([...CONTAINER_LOAD_TYPES, 'caixa_metalica', 'cesta_metalica', 'cesta']);
 
-function getLoadStartClearance(type) {
+function getLoadStartClearance(type, tr) {
+    if (tr?.tipo === 'caminhao') return 0.1;
     return LOCKED_LOAD_TYPES.has(type) ? 1.4 : 0.2;
 }
 
@@ -283,6 +402,7 @@ const inputs = {
     cavalinho: document.getElementById('input_cavalinho'),
     placa_prancha: document.getElementById('input_placa'),
     placa_carreta: document.getElementById('input_placa_carreta'),
+    placa_caminhao: document.getElementById('input_placa_caminhao'),
     cComp: document.getElementById('input_carga_comp'),
     cLarg: document.getElementById('input_carga_largura'),
     cAlt: document.getElementById('input_carga_altura'),
@@ -449,6 +569,296 @@ function loadTrailerChassis() {
     return trailerChassisPromise;
 }
 
+const rigidVehiclePromises = new Map();
+const frontFacadeTextures = new WeakMap();
+
+function loadRigidVehicle(tr) {
+    if (!rigidVehiclePromises.has(tr.modelo)) {
+        const cfg = RIGID_VEHICLE_MODELS[tr.modelo];
+        const promise = loadCompressedTrailerModel(cfg.compressedUrl, cfg.url)
+            .then(source => buildRigidVehicle(source, cfg, tr));
+        rigidVehiclePromises.set(tr.modelo, promise);
+        promise.catch(() => {
+            if (rigidVehiclePromises.get(tr.modelo) === promise) rigidVehiclePromises.delete(tr.modelo);
+        });
+    }
+    return rigidVehiclePromises.get(tr.modelo);
+}
+
+function mergeVehicleGeometries(geometries) {
+    const merged = geometries.length === 1 ? geometries[0] : joinVehicleGeometries(geometries);
+    merged.computeBoundingBox();
+    merged.computeBoundingSphere();
+    return merged;
+}
+
+function joinVehicleGeometries(geometries) {
+    const names = ['position', 'normal', 'uv'].filter(name => geometries.every(g => g.attributes[name]));
+    const vertexCount = geometries.reduce((total, g) => total + g.attributes.position.count, 0);
+    const indexCount = geometries.reduce(
+        (total, g) => total + (g.index ? g.index.count : g.attributes.position.count),
+        0
+    );
+    const merged = new THREE.BufferGeometry();
+
+    const readers = ['getX', 'getY', 'getZ'];
+    names.forEach(name => {
+        const itemSize = geometries[0].attributes[name].itemSize;
+        const array = new Float32Array(vertexCount * itemSize);
+        let offset = 0;
+        geometries.forEach(g => {
+            const attribute = g.attributes[name];
+            for (let i = 0; i < attribute.count; i++) {
+                for (let c = 0; c < itemSize; c++) {
+                    array[(offset + i) * itemSize + c] = attribute[readers[c]](i);
+                }
+            }
+            offset += attribute.count;
+        });
+        merged.setAttribute(name, new THREE.BufferAttribute(array, itemSize));
+    });
+
+    const indices = new Uint32Array(indexCount);
+    let vertexOffset = 0;
+    let indexOffset = 0;
+    geometries.forEach(g => {
+        const count = g.index ? g.index.count : g.attributes.position.count;
+        for (let i = 0; i < count; i++) {
+            indices[indexOffset + i] = vertexOffset + (g.index ? g.index.getX(i) : i);
+        }
+        indexOffset += count;
+        vertexOffset += g.attributes.position.count;
+    });
+    merged.setIndex(new THREE.BufferAttribute(indices, 1));
+    return merged;
+}
+
+function recolorFrontFacadeTexture(texture) {
+    if (frontFacadeTextures.has(texture)) return frontFacadeTextures.get(texture);
+
+    const image = texture.image;
+    const width = image?.naturalWidth || image?.width;
+    const height = image?.naturalHeight || image?.height;
+    if (!width || !height) {
+        throw new Error('A textura da frente do caminhão não possui dimensões válidas.');
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    if (!context) {
+        throw new Error('Não foi possível preparar a textura da frente do caminhão.');
+    }
+
+    context.drawImage(image, 0, 0, width, height);
+    const pixels = context.getImageData(0, 0, width, height);
+    for (let i = 0; i < pixels.data.length; i += 4) {
+        const red = pixels.data[i];
+        const green = pixels.data[i + 1];
+        const blue = pixels.data[i + 2];
+        const luminance = red * 0.2126 + green * 0.7152 + blue * 0.0722;
+        const pixel = i / 4;
+        const x = (pixel % width) / width;
+        const y = Math.floor(pixel / width) / height;
+        // A textura embutida usa tons distintos para a grade, o painel e as barras.
+        const isLogo = x >= 0.33 && x <= 0.68 && y >= 0.13 && y <= 0.205;
+        const blackDetail = luminance < 25
+            || (luminance >= 72 && luminance < 170)
+            || (isLogo && luminance > 180);
+        const color = blackDetail ? [8, 10, 12] : [255, 255, 255];
+        pixels.data[i] = color[0];
+        pixels.data[i + 1] = color[1];
+        pixels.data[i + 2] = color[2];
+    }
+    context.putImageData(pixels, 0, 0);
+
+    const recoloredTexture = texture.clone();
+    recoloredTexture.image = canvas;
+    recoloredTexture.needsUpdate = true;
+    frontFacadeTextures.set(texture, recoloredTexture);
+    return recoloredTexture;
+}
+
+// Remodela um caminhão 3D: a carroceria passa a ter exatamente o comprimento, a largura e a
+// altura de piso de `spec`, mantendo cabine e rodas com as proporções originais. O resultado
+// fica em metros, com a frente da carroceria em z = 0 e a traseira em z = -spec.mesa.
+function buildRigidVehicle(source, cfg, spec) {
+    const { bed, wheels } = cfg;
+    const scale = cfg.preScale ?? spec.h / bed.floor;
+    const bedLength = bed.front - bed.rear;
+    const targetLength = spec.mesa / scale;
+    const lengthFactor = targetLength / bedLength;
+    const widthFactor = (spec.w / scale) / bed.width;
+    const lift = (spec.h / scale) / bed.floor;
+    const wheelReach = wheels.radius * 1.12;
+    const wheelScale = wheels.scale ?? lift;
+    const cos = Math.cos(cfg.rotationY);
+    const sin = Math.sin(cfg.rotationY);
+    const step = t => {
+        const clamped = Math.min(1, Math.max(0, t));
+        return clamped * clamped * (3 - 2 * clamped);
+    };
+    const mapZ = z => z >= 0
+        ? z
+        : (z >= -bedLength ? z * lengthFactor : z + bedLength - targetLength);
+    const mapY = y => y <= bed.floor ? y * lift : y + bed.floor * (lift - 1);
+
+    const reshape = (x, y, z, out, meshWidthFactor = widthFactor, isWheel = false, forceFullWidth = false) => {
+        if (Math.abs(x) > wheels.innerX) {
+            for (const axleZ of wheels.z) {
+                const dz = z - axleZ;
+                const dy = y - wheels.radius;
+                if (dz * dz + dy * dy < wheelReach * wheelReach) {
+                    out[0] = x;
+                    out[1] = y * wheelScale + (isWheel ? (wheels.offsetY ?? 0) : 0);
+                    out[2] = mapZ(axleZ) + dz * wheelScale;
+                    return out;
+                }
+            }
+        }
+        const widening = forceFullWidth
+            ? 1
+            : step((0.2 - z) / 0.5) * step((y - bed.floor * 0.6) / (bed.floor * 0.25));
+        out[0] = x * (1 + (meshWidthFactor - 1) * widening);
+        out[1] = mapY(y);
+        out[2] = mapZ(z);
+        return out;
+    };
+
+    const paintedMaterials = new Map();
+    const paintMaterial = original => {
+        if (!original) return original;
+        if (paintedMaterials.has(original)) return paintedMaterials.get(original);
+
+        const material = original.clone();
+        const name = material.name || '';
+        const paint = cfg.paints.find(rule => rule.match.test(name));
+        if (paint) {
+            material.map = paint.recolorTexture && material.map
+                ? recolorFrontFacadeTexture(material.map)
+                : null;
+            material.metalnessMap = null;
+            material.roughnessMap = null;
+            material.color.setHex(paint.color);
+            material.metalness = paint.metalness ?? 0.1;
+            material.roughness = paint.roughness ?? 0.5;
+        } else if (material.metalness > 0.4) {
+            // Sem mapa de ambiente, metais puros aparecem pretos na cena.
+            material.metalness = 0.4;
+        }
+        if (cfg.brighten && !paint && material.map && material.emissive) {
+            material.emissive.setHex(0xffffff);
+            material.emissiveMap = material.map;
+            material.emissiveIntensity = 0.3;
+        }
+        if (cfg.interior?.test(name) && material.emissive) {
+            material.emissive.setHex(0xfff1d6);
+            material.emissiveIntensity = /Dashboard|LED/i.test(name) ? 0.9 : 0.3;
+        }
+        material.needsUpdate = true;
+        paintedMaterials.set(original, material);
+        return material;
+    };
+
+    source.updateMatrixWorld(true);
+    const meshes = [];
+    source.traverse(node => {
+        if (node.isMesh) meshes.push(node);
+    });
+
+    const point = [0, 0, 0];
+    const geometriesByMaterial = new Map();
+    meshes.forEach(mesh => {
+        const geometry = mesh.geometry.clone();
+        geometry.applyMatrix4(mesh.matrixWorld);
+        if (mesh.matrixWorld.determinant() < 0 && geometry.index) {
+            const index = geometry.index;
+            for (let i = 0; i < index.count; i += 3) {
+                const second = index.getX(i + 1);
+                index.setX(i + 1, index.getX(i + 2));
+                index.setX(i + 2, second);
+            }
+        }
+
+        const positions = geometry.attributes.position;
+        const isTimberFloor = mesh.material?.name === 'Ascot_timber' && bed.floorWidth;
+        const meshWidthFactor = isTimberFloor
+            ? (spec.w / scale) / bed.floorWidth
+            : widthFactor;
+        const isWheel = /^Tire_/i.test(mesh.name);
+        for (let i = 0; i < positions.count; i++) {
+            const x = positions.getX(i);
+            const y = positions.getY(i);
+            const z = positions.getZ(i);
+            reshape(
+                (x * cos + z * sin) * cfg.unit - bed.centerX,
+                y * cfg.unit - cfg.groundY,
+                (-x * sin + z * cos) * cfg.unit - bed.front,
+                point,
+                meshWidthFactor,
+                isWheel,
+                Boolean(isTimberFloor)
+            );
+            positions.setXYZ(i, point[0] * scale, point[1] * scale, point[2] * scale);
+        }
+        const normals = geometry.attributes.normal;
+        if (normals) {
+            for (let i = 0; i < normals.count; i++) {
+                const x = normals.getX(i);
+                const z = normals.getZ(i);
+                normals.setXYZ(i, x * cos + z * sin, normals.getY(i), -x * sin + z * cos);
+            }
+        }
+
+        const material = paintMaterial(mesh.material);
+        if (!geometriesByMaterial.has(material)) geometriesByMaterial.set(material, []);
+        geometriesByMaterial.get(material).push(geometry);
+    });
+
+    // Junta as peças que usam o mesmo material para reduzir as chamadas de desenho.
+    const root = new THREE.Group();
+    geometriesByMaterial.forEach((geometries, material) => {
+        const merged = new THREE.Mesh(mergeVehicleGeometries(geometries), material);
+        merged.castShadow = true;
+        merged.receiveShadow = true;
+        merged.userData.sharedResource = true;
+        root.add(merged);
+    });
+
+    if (cfg.bedFloorColor !== undefined) {
+        const floor = new THREE.Mesh(
+            new THREE.PlaneGeometry(spec.w_util, spec.mesa),
+            new THREE.MeshStandardMaterial({
+                color: cfg.bedFloorColor,
+                metalness: 0,
+                roughness: 0.9
+            })
+        );
+        floor.rotation.x = -Math.PI / 2;
+        floor.position.set(0, spec.h + 0.003, -spec.mesa / 2);
+        floor.receiveShadow = true;
+        floor.userData.sharedResource = true;
+        root.add(floor);
+    }
+
+    reshape(cfg.cabLight.x, cfg.cabLight.y, cfg.cabLight.z, point);
+    const cabinLight = new THREE.PointLight(0xfff1dc, 2.4, 7, 2);
+    cabinLight.position.set(point[0] * scale, point[1] * scale, point[2] * scale);
+    root.add(cabinLight);
+
+    return root;
+}
+
+function setVehicleModelStatus(message, isError = false) {
+    const status = document.getElementById('vehicle_model_status');
+    if (!status) return;
+    status.textContent = message;
+    status.classList.toggle('hidden', !message);
+    status.classList.toggle('text-red-700', isError);
+    status.classList.toggle('text-slate-600', !isError);
+}
+
 function frameVehicleView() {
     const bounds = new THREE.Box3().setFromObject(trailerGroup);
     if (loadGroup.children.length) bounds.union(new THREE.Box3().setFromObject(loadGroup));
@@ -486,6 +896,7 @@ function frameVehicleView() {
 function getActiveTrailerId() {
     if (inputs.placa_prancha.value) return inputs.placa_prancha.value;
     if (inputs.placa_carreta.value) return inputs.placa_carreta.value;
+    if (inputs.placa_caminhao.value) return inputs.placa_caminhao.value;
     return "prancha_reb_6_3";
 }
 
@@ -497,7 +908,7 @@ function setVehicleSelectorTab(tab) {
         button.tabIndex = isActive ? 0 : -1;
     });
 
-    ['cavalinho', 'prancha', 'carreta'].forEach(panel => {
+    ['cavalinho', 'prancha', 'carreta', 'caminhao'].forEach(panel => {
         document.getElementById(`panel_${panel}`).classList.toggle('hidden', panel !== tab);
     });
 }
@@ -513,6 +924,7 @@ inputs.tampas.addEventListener('change', analyzeAndDraw);
 inputs.placa_prancha.addEventListener('change', () => {
     if (inputs.placa_prancha.value) {
         inputs.placa_carreta.value = "";
+        inputs.placa_caminhao.value = "";
         setVehicleSelectorTab('prancha');
     }
     updateTrailerInfo();
@@ -520,7 +932,16 @@ inputs.placa_prancha.addEventListener('change', () => {
 inputs.placa_carreta.addEventListener('change', () => {
     if (inputs.placa_carreta.value) {
         inputs.placa_prancha.value = "";
+        inputs.placa_caminhao.value = "";
         setVehicleSelectorTab('carreta');
+    }
+    updateTrailerInfo();
+});
+inputs.placa_caminhao.addEventListener('change', () => {
+    if (inputs.placa_caminhao.value) {
+        inputs.placa_prancha.value = "";
+        inputs.placa_carreta.value = "";
+        setVehicleSelectorTab('caminhao');
     }
     updateTrailerInfo();
 });
@@ -541,7 +962,7 @@ function getGridMetrics(tr, carga, isCarreta, cComp = carga.comp) {
     const camadas = Math.max(1, Number.parseInt(carga.camadas, 10) || 1);
     const pecasNaBase = Math.ceil(cQtd / camadas);
     const standardGap = getLoadGap(type);
-    const usesGates = isCarreta && inputs.tampas.value === 'com' && tr.tipo !== 'sider' && tr.tipo !== 'carreta_bau';
+    const usesGates = usesSideGates(tr, isCarreta);
     const availableWidth = usesGates ? tr.w_util : tr.w;
     const isDistributed = isCarreta &&
         peso * cQtd > tr.cap / 2 &&
@@ -732,7 +1153,7 @@ function positionLoadAllocations(tr, isCarreta, allocations) {
         const carga = { ...originalCarga, qtd: qtdAlocada, qtdAlocada };
         const splitCoils = !isCarreta && tr.pescoco > 0 &&
             (carga.type === 'bobina_lado_2' || carga.type === 'bobina_frente_2');
-        const clearance = getLoadStartClearance(carga.type);
+        const clearance = getLoadStartClearance(carga.type, tr);
         const coilLength = splitCoils ? carga.comp / 2 : carga.comp;
         const grid = getGridMetrics(tr, carga, isCarreta, coilLength);
         const isConcentrada = isCarreta &&
@@ -1092,11 +1513,13 @@ els.btnCancelarEdicao.addEventListener('click', cancelarEdicaoCarga);
 function updateTrailerInfo() {
     if (activeCargaTab === 'tubos' && !TUBE_TRAILER_IDS.has(getActiveTrailerId())) {
         inputs.placa_prancha.value = "";
+        inputs.placa_caminhao.value = "";
         inputs.placa_carreta.value = "carreta_padrao";
     }
     if (activeCargaTab === 'tubos') setVehicleSelectorTab('carreta');
 
     inputs.placa_prancha.disabled = activeCargaTab === 'tubos';
+    inputs.placa_caminhao.disabled = activeCargaTab === 'tubos';
     document.getElementById('tube_trailer_rule').classList.toggle('hidden', activeCargaTab !== 'tubos');
     const placa = getActiveTrailerId();
     if (bdVeiculos[placa]) {
@@ -1114,12 +1537,12 @@ function updateTrailerInfo() {
             ? "-"
             : currentTrailer.compTotal.toFixed(2);
         
-        const isCarreta = currentTrailer.tipo.includes('carreta') || currentTrailer.tipo === 'vanderleia' || currentTrailer.tipo === 'sider';
+        const isCarreta = isMesaOnlyVehicle(currentTrailer);
         if (isCarreta) {
             infos.pescoco.value = "-";
             inputs.posicao.value = "mesa";
             inputs.posicao.disabled = true;
-            if (currentTrailer.tipo === 'sider' || currentTrailer.tipo === 'carreta_bau') {
+            if (currentTrailer.tipo === 'sider' || currentTrailer.tipo === 'carreta_bau' || currentTrailer.paredesFixas) {
                 inputs.tampas.disabled = true;
             } else {
                 inputs.tampas.disabled = false;
@@ -1138,10 +1561,13 @@ function updateTrailerInfo() {
         if (currentTrailer.tipo === 'carreta_bau') tipoNome = "Carreta Baú (15m)";
         if (currentTrailer.tipo === 'vanderleia') tipoNome = "Vanderléia";
         if (currentTrailer.tipo === 'sider') tipoNome = "Carreta Sider";
+        if (currentTrailer.tipo === 'caminhao') tipoNome = currentTrailer.nome;
         
         infos.tagTipo.textContent = tipoNome;
         
-        if (isCarreta) {
+        if (currentTrailer.tipo === 'caminhao') {
+            infos.tagTipo.className = "px-2 py-1 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded";
+        } else if (isCarreta) {
             infos.tagTipo.className = "px-2 py-1 bg-amber-100 text-amber-800 text-[10px] font-bold rounded";
         } else {
             infos.tagTipo.className = "px-2 py-1 bg-blue-100 text-blue-800 text-[10px] font-bold rounded";
@@ -1262,16 +1688,15 @@ function renderCargoAnalysisSummary(loadSequence, totalWeight) {
 }
 
 function getSpilloverSuggestion() {
-    const fleet = [
-        { name: 'VUC', cap: 1, comp: 4, larg: 2, alt: 3 },
-        { name: 'Toco', cap: 9, comp: 7, larg: 2.44, alt: 3 },
-        { name: 'Truck', cap: 15, comp: 8, larg: 2.44, alt: 3 }
-    ];
+    const fleet = [...new Map(Object.values(bdVeiculos)
+        .filter(vehicle => vehicle.tipo === 'caminhao')
+        .map(vehicle => [vehicle.grupo, { name: vehicle.grupo, cap: vehicle.cap, comp: vehicle.mesa, larg: vehicle.w_util, alt: 3 }])
+    ).values()].sort((a, b) => a.cap - b.cap);
     const totalPieces = cargasTransbordo.reduce((total, carga) => total + carga.qtd, 0);
     const totalWeight = cargasTransbordo.reduce((total, carga) => total + carga.peso * carga.qtd, 0);
     const vehicle = fleet.find(candidate => {
         const vehicleTrailer = {
-            tipo: 'carreta',
+            tipo: 'caminhao',
             w: candidate.larg,
             w_util: candidate.larg,
             mesa: candidate.comp,
@@ -1284,7 +1709,7 @@ function getSpilloverSuggestion() {
         cargasTransbordo.forEach((carga, index) => {
             const grid = getGridMetrics(vehicleTrailer, carga, true);
             const startGap = index === 0
-                ? (grid.isDistributed ? 0 : getLoadStartClearance(carga.type))
+                ? (grid.isDistributed ? 0 : getLoadStartClearance(carga.type, vehicleTrailer))
                 : previousGap;
             totalLength += grid.totalComp + startGap;
             previousGap = grid.gap;
@@ -1368,7 +1793,7 @@ function analyzeTubesAndDraw(tr, isCarreta) {
 function analyzeAndDraw() {
     const tr = currentTrailer;
     const pos = inputs.posicao.value;
-    const isCarreta = tr.tipo.includes('carreta') || tr.tipo === 'vanderleia' || tr.tipo === 'sider';
+    const isCarreta = isMesaOnlyVehicle(tr);
     const spilloverAlert = document.getElementById('spillover_alert');
     if (activeCargaTab === 'tubos') {
         spilloverAlert.classList.add('hidden');
@@ -1376,7 +1801,7 @@ function analyzeAndDraw() {
         analyzeTubesAndDraw(tr, isCarreta);
         return;
     }
-    const usesGates = isCarreta && inputs.tampas.value === 'com' && tr.tipo !== 'sider' && tr.tipo !== 'carreta_bau';
+    const usesGates = usesSideGates(tr, isCarreta);
     const availableWidth = usesGates ? tr.w_util : tr.w;
     let espacoDisponivel = pos === 'mesa' || isCarreta ? tr.mesa : tr.pescoco;
     if (tr.tipo === 'reta') espacoDisponivel = tr.mesa; 
@@ -1412,7 +1837,9 @@ function analyzeAndDraw() {
         if (totalLargMax > 3.20) aetMotivo += `(Excede limite legal de 3.20m).`;
     } else if (isCarreta && totalLargMax > availableWidth) {
         if (usesGates) {
-            aetMotivo = `Atenção: Algum bloco de carga (${totalLargMax.toFixed(2)}m) excede a área útil entre as tampas (${availableWidth.toFixed(2)}m). Mude para "Sem tampas laterais". `;
+            aetMotivo = tr.paredesFixas
+                ? `Atenção: Algum bloco de carga (${totalLargMax.toFixed(2)}m) excede a largura interna da carroceria (${availableWidth.toFixed(2)}m). `
+                : `Atenção: Algum bloco de carga (${totalLargMax.toFixed(2)}m) excede a área útil entre as tampas (${availableWidth.toFixed(2)}m). Mude para "Sem tampas laterais". `;
             alertClass = "bg-amber-50 border-amber-200 text-amber-800";
             iconColor = "text-amber-600";
         }
@@ -1461,7 +1888,7 @@ function analyzeAndDraw() {
     }
 
     if (composicaoCargas.length === 0) {
-        els.titleAet.textContent = "CARRETA VAZIA"; 
+        els.titleAet.textContent = tr.tipo === 'caminhao' ? "CARROCERIA VAZIA" : "CARRETA VAZIA"; 
         els.descAet.textContent = "Adicione itens na composição de carga.";
         alertClass = "bg-slate-50 border-slate-200 text-slate-800";
         iconColor = "text-slate-500";
@@ -1526,6 +1953,7 @@ function draw3D(tr, pos, isCarreta) {
         while (group.children.length) {
             const obj = group.children.pop();
             obj.traverse?.(child => {
+                if (child.userData?.sharedResource) return;
                 if (child.geometry) child.geometry.dispose();
                 if (child.material) {
                     (Array.isArray(child.material) ? child.material : [child.material]).forEach(m => m.dispose());
@@ -1887,7 +2315,8 @@ function draw3D(tr, pos, isCarreta) {
     let pL=0, mL=tr.mesa*S, bridgeL=3.15*S;
     if (!isCarreta) pL = tr.pescoco*S;
     
-    const deckY = (tr.tipo==='reta' || isCarreta) ? pH : hT;
+    const isRigidTruck = tr.tipo === 'caminhao';
+    const deckY = isRigidTruck ? hT : ((tr.tipo==='reta' || isCarreta) ? pH : hT);
     let rearStart = 0;
     if (isCarreta) {
         rearStart = -mL; 
@@ -1899,6 +2328,69 @@ function draw3D(tr, pos, isCarreta) {
     const shiftZ = 1.5 * S; 
     
     const usesChassisModel = ['carreta_ext', 'carreta', 'sider', 'carreta_bau', 'vanderleia'].includes(tr.tipo);
+
+    function drawRigidTruckBodywork() {
+        const tampH = 0.80*S, tampT = 0.03*S;
+        const includeSideboards = inputs.tampas.value === 'com';
+        const deckCenterZ = -mL/2 + shiftZ;
+
+        // Malhal (frente) mais alto, tampa traseira e, opcionalmente, as laterais.
+        box(wT, tampH*1.5, tampT, corrugatedMat, 0, deckY + (tampH*1.5)/2, shiftZ - tampT/2);
+        box(wT, tampH, tampT, corrugatedMat, 0, deckY + tampH/2, -mL + shiftZ + tampT/2);
+        if (includeSideboards) {
+            [-1,1].forEach(side => {
+                box(tampT, tampH, mL - 2*tampT, corrugatedMat, side*(wT/2 - tampT/2), deckY + tampH/2, deckCenterZ);
+            });
+        }
+        drawTrailerSideboardDetails(wT, mL, deckY, tampH, tampT, deckCenterZ, includeSideboards);
+
+        // Sinalização vermelha e branca colada na lateral, na linha do assoalho.
+        const stripCount = Math.max(2, Math.round(tr.mesa / 0.4));
+        const stripLength = (mL - 0.3*S) / stripCount;
+        const stripThickness = 0.012*S;
+        for (let i = 0; i < stripCount; i++) {
+            const z = shiftZ - 0.15*S - stripLength*(i + 0.5);
+            [-1,1].forEach(side => {
+                box(stripThickness, 0.09*S, stripLength, i % 2 === 0 ? bumperRed : bumperWhite,
+                    side*(wT/2 + stripThickness/2), deckY - 0.11*S, z);
+            });
+        }
+    }
+
+    function drawRigidTruckFallback() {
+        const deckCenterZ = -mL/2 + shiftZ;
+        const cabLength = (tr.cabL ?? 2) * S;
+        const cabHeight = (tr.cabH ?? 2.5) * S;
+        box(wT, .24*S, mL, frame, 0, deckY - .12*S, deckCenterZ);
+        box(wT*.94, .045*S, mL*.96, wood, 0, deckY + .02*S, deckCenterZ);
+        box(wT*.98, cabHeight - deckY + .24*S, cabLength, white, 0, (cabHeight + deckY - .24*S)/2, shiftZ + cabLength/2 + .05*S);
+        const wheelRadius = (tr.wheelR ?? .5) * S;
+        const wheelZs = [shiftZ + cabLength*.55];
+        for (let i = 0; i < (tr.rearAxles ?? 1); i++) wheelZs.push(shiftZ - mL + (1 + i*1.3)*S);
+        wheelZs.forEach(z => [-1, 1].forEach(side => {
+            wheel(side*(wT/2 - .2*S), wheelRadius, z, wheelRadius, .3*S, trailerGroup, false);
+        }));
+    }
+
+    function addRigidTruckModel() {
+        setVehicleModelStatus('Carregando o modelo 3D do veículo…');
+        loadRigidVehicle(tr).then(vehicle => {
+            if (drawRevision !== draw3DRevision) return;
+
+            const object = vehicle.clone(true);
+            object.scale.setScalar(S);
+            object.position.set(0, 0, shiftZ);
+            trailerGroup.add(object);
+            setVehicleModelStatus('');
+            frameVehicleView();
+        }).catch(error => {
+            console.error(`Erro ao carregar o modelo ${tr.modelo}:`, error);
+            if (drawRevision !== draw3DRevision) return;
+            setVehicleModelStatus('Não foi possível carregar o modelo 3D; exibindo uma carroceria simplificada.', true);
+            drawRigidTruckFallback();
+            frameVehicleView();
+        });
+    }
 
     function addChassisModel() {
         const loadChassis = () => loadTrailerChassis().then(source => {
@@ -1969,7 +2461,10 @@ function draw3D(tr, pos, isCarreta) {
     }
 
     const cabModelId = inputs.cavalinho.value || 'semi_obj';
-    loadCabModel(cabModelId).then(source => {
+    if (isRigidTruck) addRigidTruckModel();
+    else {
+        setVehicleModelStatus('');
+        loadCabModel(cabModelId).then(source => {
         if (drawRevision !== draw3DRevision) return;
 
         const object = source.clone(true);
@@ -2176,11 +2671,15 @@ function draw3D(tr, pos, isCarreta) {
             frameVehicleView();
         }
     }).catch(error => console.error(`Erro ao carregar o cavalinho ${cabModelId}:`, error));
+    }
 
     const deckMat=usesChassisModel ? white : frame;
     const woodMat=wood;
 
-    if (isCarreta) {
+    if (isRigidTruck) {
+        // A carroceria vem do modelo 3D; tampas e sinalização são desenhadas aqui.
+        if (!tr.paredesFixas) drawRigidTruckBodywork();
+    } else if (isCarreta) {
         rearStart += shiftZ;
         const deckCenterZ=-mL/2+shiftZ;
         box(wT,.24*S,mL,usesChassisModel?deckBase:deckMat,0,deckY-.12*S,deckCenterZ);
@@ -3551,11 +4050,12 @@ function drawSide2D(ctx, canvas, tr, pos, isCarreta) {
         maxCargaH = Math.max(maxCargaH, stackBaseHeight + grid.maxStackHeight);
     });
     
+    const isRigid = tr.tipo === 'caminhao';
     const trailerSpan = isCarreta
         ? tr.mesa
         : tr.pescoco + getDeckTransitionLength(tr) + tr.mesa + bridgeL;
     const wTotal = cTractor + trailerSpan + 2;
-    const hTotal = Math.max(5.0, (tr.tipo === 'reta' || isCarreta ? 1.6 : Math.max(1.6, tr.h)) + maxCargaH + 2); 
+    const hTotal = Math.max(5.0, (isRigid ? tr.h : (tr.tipo === 'reta' || isCarreta ? 1.6 : Math.max(1.6, tr.h))) + maxCargaH + 2); 
 
     const scale = Math.min((canvas.width - 20) / wTotal, (canvas.height - 20) / hTotal);
     const groundY = canvas.height - 15;
@@ -3566,22 +4066,41 @@ function drawSide2D(ctx, canvas, tr, pos, isCarreta) {
         ctx.beginPath(); ctx.arc(cx, groundY - r, r, 0, Math.PI*2); ctx.fillStyle='#1e293b'; ctx.fill();
     };
 
-    ctx.fillStyle = '#0284c7'; 
-    ctx.fillRect(startX + 3*scale, groundY - (2.5*scale), 1.5*scale, 1.5*scale);
-    ctx.fillRect(startX + 1*scale, groundY - (3.5*scale), 2*scale, 2.5*scale);
-    drawWheel(startX + 3.5*scale); drawWheel(startX); drawWheel(startX - 1.2*scale);
+    if (isRigid) {
+        const cabL = tr.cabL * scale;
+        const cabH = tr.cabH * scale;
+        const wheelFactor = tr.wheelR / 0.5;
+        ctx.fillStyle = '#475569';
+        ctx.fillRect(startX, groundY - 0.9*scale, cabL, 0.3*scale);
+        ctx.fillStyle = '#f1f5f9'; ctx.strokeStyle = '#64748b'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.rect(startX, groundY - cabH, cabL, cabH - 0.9*scale); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#334155';
+        ctx.fillRect(startX + cabL*0.45, groundY - cabH + 0.25*scale, cabL*0.5, (cabH - 0.9*scale)*0.38);
+        ctx.fillStyle = '#fde68a';
+        ctx.fillRect(startX + cabL*0.1, groundY - cabH + 0.45*scale, cabL*0.25, 0.25*scale);
+        drawWheel(startX + cabL*0.55, wheelFactor);
+    } else {
+        ctx.fillStyle = '#0284c7'; 
+        ctx.fillRect(startX + 3*scale, groundY - (2.5*scale), 1.5*scale, 1.5*scale);
+        ctx.fillRect(startX + 1*scale, groundY - (3.5*scale), 2*scale, 2.5*scale);
+        drawWheel(startX + 3.5*scale); drawWheel(startX); drawWheel(startX - 1.2*scale);
+    }
 
     const pL = isCarreta ? 0 : tr.pescoco * scale;
-    const pH = 1.6 * scale; 
+    const pH = (isRigid ? tr.h : 1.6) * scale; 
     const hT = tr.h * scale; 
     const mL = tr.mesa * scale;
 
     ctx.fillStyle = '#475569';
     if (isCarreta) {
         ctx.fillRect(startX - mL, groundY - pH, mL, 0.3*scale);
-        const axleLayout = getCarretaAxleLayout(tr);
-        const startAxleX = startX - mL + axleLayout.firstFromRear*scale;
-        for (let i=0; i<tr.eixos; i++) drawWheel(startAxleX + (i*axleLayout.spacing*scale));
+        if (isRigid) {
+            for (let i=0; i<tr.rearAxles; i++) drawWheel(startX - mL + (1 + i*1.3)*scale, tr.wheelR / 0.5);
+        } else {
+            const axleLayout = getCarretaAxleLayout(tr);
+            const startAxleX = startX - mL + axleLayout.firstFromRear*scale;
+            for (let i=0; i<tr.eixos; i++) drawWheel(startAxleX + (i*axleLayout.spacing*scale));
+        }
     } else {
         ctx.fillRect(startX - pL, groundY - pH, pL, 0.3*scale); 
         if (tr.tipo === 'reta') {
@@ -3658,14 +4177,17 @@ function drawRear2D(ctx, canvas, tr, pos, isCarreta) {
         maxLoadHeight = Math.max(maxLoadHeight, stackBaseHeight + grid.maxStackHeight);
     });
 
+    const rearDeckHeight = tr.tipo === 'caminhao'
+        ? tr.h
+        : (tr.tipo === 'reta' || pos === 'pescoco' || isCarreta ? 1.6 : tr.h);
     const wTotal = Math.max(tr.w, maxW) + 2; 
-    const hTotal = Math.max(4.5, (tr.tipo === 'reta' || pos === 'pescoco' || isCarreta ? 1.6 : tr.h) + (tr.tipo==='sider'?2.8: maxLoadHeight) + 1);
+    const hTotal = Math.max(4.5, rearDeckHeight + (tr.tipo==='sider'?2.8: maxLoadHeight) + 1);
     const scale = Math.min((canvas.width - 20) / wTotal, (canvas.height - 20) / hTotal);
     const groundY = canvas.height - 15;
     const centerX = canvas.width / 2;
 
     const tW = tr.w * scale;
-    const tH = (tr.tipo === 'reta' || pos === 'pescoco' || isCarreta ? 1.6 : tr.h) * scale;
+    const tH = rearDeckHeight * scale;
     
     ctx.fillStyle = '#475569';
     ctx.fillRect(centerX - tW/2, groundY - tH, tW, 0.4*scale);
@@ -3700,7 +4222,7 @@ function drawRear2D(ctx, canvas, tr, pos, isCarreta) {
         }
     });
 
-    const limitW = isCarreta && inputs.tampas.value === 'com' && tr.tipo !== 'sider' && tr.tipo !== 'carreta_bau' ? tr.w_util : tr.w;
+    const limitW = usesSideGates(tr, isCarreta) ? tr.w_util : tr.w;
     if (maxW > limitW) {
         const excW = limitW * scale;
         const cW_max = maxW * scale;
@@ -3762,7 +4284,7 @@ els.btnReset.addEventListener('click', () => {
     editingCargaIndex = null;
     atualizarBotaoCarga();
     renderListaCargas();
-    inputs.placa_carreta.value = ""; inputs.placa_prancha.value = "prancha_reb_6_3";
+    inputs.placa_carreta.value = ""; inputs.placa_caminhao.value = ""; inputs.placa_prancha.value = "prancha_reb_6_3";
     setVehicleSelectorTab('prancha');
     updateTrailerInfo();
 });
@@ -3773,15 +4295,18 @@ function setCargaTab(tab) {
         cargoTrailerSelectionBeforeTubes = {
             prancha: inputs.placa_prancha.value,
             carreta: inputs.placa_carreta.value,
+            caminhao: inputs.placa_caminhao.value,
             vehicleTab: document.querySelector('[data-vehicle-tab][aria-selected="true"]')?.dataset.vehicleTab
         };
         if (!TUBE_TRAILER_IDS.has(getActiveTrailerId())) {
             inputs.placa_prancha.value = "";
+            inputs.placa_caminhao.value = "";
             inputs.placa_carreta.value = "carreta_padrao";
         }
     } else if (!isTubes && cargoTrailerSelectionBeforeTubes) {
         inputs.placa_prancha.value = cargoTrailerSelectionBeforeTubes.prancha;
         inputs.placa_carreta.value = cargoTrailerSelectionBeforeTubes.carreta;
+        inputs.placa_caminhao.value = cargoTrailerSelectionBeforeTubes.caminhao || '';
         setVehicleSelectorTab(cargoTrailerSelectionBeforeTubes.vehicleTab ||
             (cargoTrailerSelectionBeforeTubes.carreta ? 'carreta' : 'prancha'));
         cargoTrailerSelectionBeforeTubes = null;
@@ -3915,6 +4440,7 @@ function capturePlanState() {
             cavalinho: inputs.cavalinho.value,
             prancha: inputs.placa_prancha.value,
             carreta: inputs.placa_carreta.value,
+            caminhao: inputs.placa_caminhao.value,
             posicao: inputs.posicao.value,
             tampas: inputs.tampas.value
         },
@@ -3950,11 +4476,12 @@ function validatePlanState(state) {
     if (state.cargo.items.length > 500 || !LOAD_TYPES.some(type => type.value === state.cargo.type)) {
         throw new Error('Este planejamento contém dados inválidos.');
     }
-    const validVehicleTabs = ['cavalinho', 'prancha', 'carreta'];
+    const validVehicleTabs = ['cavalinho', 'prancha', 'carreta', 'caminhao'];
     if (!validVehicleTabs.includes(state.vehicleTab) ||
         !CAB_MODELS[state.trailer.cavalinho] ||
         (state.trailer.prancha && !bdVeiculos[state.trailer.prancha]) ||
         (state.trailer.carreta && !bdVeiculos[state.trailer.carreta]) ||
+        (state.trailer.caminhao && bdVeiculos[state.trailer.caminhao]?.tipo !== 'caminhao') ||
         !['mesa', 'pescoco'].includes(state.trailer.posicao) ||
         !['com', 'sem'].includes(state.trailer.tampas)) {
         throw new Error('Este planejamento contém um veículo inválido.');
@@ -3986,6 +4513,7 @@ function restorePlanState(state) {
     inputs.cavalinho.value = state.trailer.cavalinho;
     inputs.placa_prancha.value = state.trailer.prancha || '';
     inputs.placa_carreta.value = state.trailer.carreta || '';
+    inputs.placa_caminhao.value = state.trailer.caminhao || '';
     setVehicleSelectorTab(state.vehicleTab);
     if (state.activeTab === 'tubos' && state.cargoTrailerSelectionBeforeTubes) {
         cargoTrailerSelectionBeforeTubes = { ...state.cargoTrailerSelectionBeforeTubes };

@@ -29,3 +29,18 @@ A tabela aplica Row Level Security (RLS): cada conta só pode consultar, alterar
 ## Planejamento de cargas e tubos
 
 Na área de cargas, as abas **Cargas** e **Tubos** mantêm os planejamentos separados. Tubos são planejados somente para carretas de 14 m ou 15 m; o comprimento é definido automaticamente como 13 m ou 14 m, respectivamente. O cálculo usa o diâmetro externo efetivo, a largura útil e a altura informadas para estimar tubos por camada, camadas, capacidade, peso e viagens. A aba também mostra o arranjo na carroceria em 3D e o corte frontal, com opção para ilustrar quatro cintas e redes drapeadas e presas nas duas pontas; revise as dimensões, os dormentes e a amarração antes do transporte.
+
+## Caminhões
+
+A aba **Caminhões** do seletor de veículos usa caminhões com carroceria própria, sem cavalinho. As medidas informadas são internas; a largura externa soma 3 cm de cada lado e o piso real é 20 cm mais longo que o informado, para dar folga às cargas:
+
+| Veículo | Carroceria útil (C × L interna) | Piso real (C × L externa) | Altura do solo ao piso | Capacidade |
+| --- | --- | --- | --- | --- |
+| Truck | 8 m × 2,44 m | 8,20 m × 2,50 m | 1,50 m | 12 t |
+| Toco | 6 m × 2,44 m | 6,20 m × 2,50 m | 1,50 m | 8 t |
+| VUC / F350 (Chevrolet, Honda ou Mercedes-Benz) | 4 m × 2 m | 4,20 m × 2,06 m | 1,10 m | 1 t |
+| Utilitário Saveiro | 1,6 m × 1 m | 1,80 m × 1,06 m | 0,80 m | 400 kg |
+
+No Truck e no Toco, **Com tampas laterais** limita a carga a 2,44 m e **Sem tampas laterais** libera os 2,50 m; o malhal (frente) e a tampa traseira sempre aparecem, assim como a sinalização vermelha e branca colada na lateral, na linha do assoalho. As paredes dos VUC e do Saveiro fazem parte do modelo 3D e sempre limitam a carga à largura interna.
+
+Os modelos 3D ficam em `caminhões/`. Ao carregar, cada modelo é remodelado para que a carroceria tenha exatamente as medidas acima (veja `RIGID_VEHICLE_MODELS` em `app.js`), recebe a cor padrão branca com detalhes em cinza escuro e uma luz interna na cabine. Para trocar um modelo ou ajustar as medidas, edite as entradas `caminhao_*` de `bdVeiculos` e a configuração do modelo correspondente. O comando `npm run build:web` publica cada modelo compactado em `modelos/*.glb.gz`; o site baixa somente as versões compactadas e só carrega o modelo do veículo escolhido.

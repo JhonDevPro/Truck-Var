@@ -83,6 +83,7 @@
                         <button id="tab_cavalinho" type="button" role="tab" aria-selected="false" aria-controls="panel_cavalinho" data-vehicle-tab="cavalinho" class="vehicle-tab">Cavalinho</button>
                         <button id="tab_prancha" type="button" role="tab" aria-selected="true" aria-controls="panel_prancha" data-vehicle-tab="prancha" class="vehicle-tab vehicle-tab-active">Prancha</button>
                         <button id="tab_carreta" type="button" role="tab" aria-selected="false" aria-controls="panel_carreta" data-vehicle-tab="carreta" class="vehicle-tab">Carreta</button>
+                        <button id="tab_caminhao" type="button" role="tab" aria-selected="false" aria-controls="panel_caminhao" data-vehicle-tab="caminhao" class="vehicle-tab">Caminhões</button>
                     </div>
                     <div class="vehicle-selector-panel">
                         <div id="panel_cavalinho" role="tabpanel" aria-labelledby="tab_cavalinho" class="hidden">
@@ -121,6 +122,18 @@
                                 <option value="carreta_sider">Carreta Sider (14m)</option>
                             </select>
                             <p id="tube_trailer_rule" class="hidden mt-2 text-[10px] font-semibold text-amber-900">Para tubos, use somente carretas de 14 m ou 15 m. O comprimento dos tubos é ajustado automaticamente para não encostar nas tampas.</p>
+                        </div>
+                        <div id="panel_caminhao" role="tabpanel" aria-labelledby="tab_caminhao" class="hidden">
+                            <label for="input_placa_caminhao" class="block text-xs font-bold text-emerald-800 mb-2 uppercase tracking-wide">Selecionar Caminhão</label>
+                            <select id="input_placa_caminhao" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 font-semibold bg-white text-slate-700">
+                                <option value="">-- Nenhum Caminhão --</option>
+                                <option value="caminhao_truck">Truck (carroceria 8m, 12t)</option>
+                                <option value="caminhao_toco">Toco (carroceria 6m, 8t)</option>
+                                <option value="caminhao_vuc_chevrolet">VUC F350 Chevrolet (4m, 1t)</option>
+                                <option value="caminhao_vuc_honda">VUC F350 Honda (4m, 1t)</option>
+                                <option value="caminhao_vuc_mercedes">VUC F350 Mercedes-Benz (4m, 1t)</option>
+                                <option value="caminhao_saveiro">Utilitário Saveiro (1,6m, 400kg)</option>
+                            </select>
                         </div>
                     </div>
                 </div>
@@ -162,7 +175,7 @@
                         </select>
                     </div>
                     <div>
-                        <label class="block text-xs font-semibold text-slate-700 mb-1">Tampas (Carretas)</label>
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">Tampas (Carretas e Caminhões)</label>
                         <select id="input_tampas" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                             <option value="com">Com tampas laterais</option>
                             <option value="sem">Sem tampas laterais</option>
@@ -351,6 +364,7 @@
                 <div class="p-0 flex flex-col flex-grow relative">
                     <div id="three-container" class="w-full bg-[#eef2f6] rounded-b-lg relative h-3d-view overflow-hidden">
                         <!-- Canvas 3D -->
+                        <div id="vehicle_model_status" role="status" class="hidden absolute top-3 left-3 right-3 z-10 pointer-events-none rounded-md bg-white/90 px-3 py-1.5 text-[11px] font-semibold text-slate-600 shadow-sm"></div>
                         <div class="absolute bottom-3 left-3 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full shadow-sm text-[10px] font-bold text-slate-500 border border-slate-200">
                             GRADE &bull; 1 CÉLULA = 1 M
                         </div>
