@@ -491,9 +491,16 @@ const UNBRANDED_CONTAINER_TYPES = new Set([
 ]);
 const LOCKED_LOAD_TYPES = new Set([...CONTAINER_LOAD_TYPES, 'caixa_metalica', 'cesta_metalica', 'cesta']);
 
+function isLockedLoad(type, tr) {
+    if (LOCKED_LOAD_TYPES.has(type)) return true;
+    const model = generalCargoByType.get(type);
+    return !!(model && tr && tr.tipo !== 'caminhao' && isMesaOnlyVehicle(tr) &&
+        /container|cesta/i.test(model.file));
+}
+
 function getLoadStartClearance(type, tr) {
     if (tr?.tipo === 'caminhao') return 0.1;
-    return LOCKED_LOAD_TYPES.has(type) ? 1.4 : 0.2;
+    return isLockedLoad(type, tr) ? 1.4 : 0.2;
 }
 
 function getDeckTransitionLength(tr) {
@@ -1136,12 +1143,15 @@ function getGridMetrics(tr, carga, isCarreta, cComp = carga.comp) {
     const standardGap = getLoadGap(type);
     const usesGates = usesSideGates(tr, isCarreta);
     const availableWidth = usesGates ? tr.w_util : tr.w;
+    const lockClearance = isCarreta && tr.tipo !== 'caminhao' && isLockedLoad(type, tr)
+        ? getLoadStartClearance(type, tr)
+        : 0;
     const isDistributed = isCarreta &&
         peso * cQtd > tr.cap / 2 &&
         pecasNaBase > 1 &&
-        pecasNaBase * cComp <= tr.mesa;
+        pecasNaBase * cComp + lockClearance <= tr.mesa;
     const gap = isDistributed
-        ? (tr.mesa - pecasNaBase * cComp) / (pecasNaBase - 1)
+        ? (tr.mesa - lockClearance - pecasNaBase * cComp) / (pecasNaBase - 1)
         : standardGap;
 
     let maxCols = isDistributed
@@ -1348,7 +1358,9 @@ function positionLoadAllocations(tr, isCarreta, allocations) {
         const distributedLoads = loads.filter(load => load.grid.isDistributed);
         if (distributedLoads.length) {
             distributedLoads.forEach(load => {
-                load.startOffset = 0;
+                load.startOffset = tr.tipo !== 'caminhao' && isLockedLoad(load.carga.type, tr)
+                    ? load.clearance
+                    : 0;
             });
             const positionedLoadsByIndex = new Map(
                 distributedLoads.map(load => [load.compositionIndex, load])
@@ -1412,8 +1424,14 @@ function positionLoadAllocations(tr, isCarreta, allocations) {
             const axleCenterFromRear = axleLayout.firstFromRear +
                 (Math.max(1, tr.eixos) - 1) * axleLayout.spacing / 2;
             const axleCenterOffset = tr.mesa - axleCenterFromRear;
+            const minimumStart = concentratedLoads.reduce(
+                (min, load) => tr.tipo !== 'caminhao' && isLockedLoad(load.carga.type, tr)
+                    ? Math.max(min, load.clearance - load.startOffset)
+                    : min,
+                0
+            );
             concentratedStart = Math.max(
-                0,
+                minimumStart,
                 Math.min(tr.mesa - concentratedLength, axleCenterOffset - concentratedLength / 2)
             );
             concentratedLoads.forEach(load => {
@@ -1451,6 +1469,9 @@ function positionLoadAllocations(tr, isCarreta, allocations) {
 
             rearQueueStarted = true;
             load.startOffset = normalRearOffset + normalRearGap;
+            if (tr.tipo !== 'caminhao' && isLockedLoad(load.carga.type, tr)) {
+                load.startOffset = Math.max(load.startOffset, load.clearance);
+            }
             normalRearOffset = load.startOffset + load.grid.totalComp;
             normalRearGap = load.grid.gap;
             positionedLoadsByIndex.set(load.compositionIndex, load);
