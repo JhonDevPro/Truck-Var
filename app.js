@@ -476,6 +476,7 @@ const inputs = {
     cLarg: document.getElementById('input_carga_largura'),
     cAlt: document.getElementById('input_carga_altura'),
     cPeso: document.getElementById('input_carga_peso'),
+    cPesoUnit: document.getElementById('input_carga_peso_unit'),
     cQtd: document.getElementById('input_carga_qtd'),
     cCamadas: document.getElementById('input_carga_camadas'),
     cSobreAnterior: document.getElementById('input_empilhar_anterior'),
@@ -534,12 +535,46 @@ const generalCargo = {
     larg: document.getElementById('general_cargo_width'),
     alt: document.getElementById('general_cargo_height'),
     peso: document.getElementById('general_cargo_weight'),
+    pesoUnit: document.getElementById('general_cargo_weight_unit'),
     qtd: document.getElementById('general_cargo_quantity'),
     camadas: document.getElementById('general_cargo_layers'),
     stack: document.getElementById('general_cargo_stack'),
     add: document.getElementById('general_cargo_add'),
     cancel: document.getElementById('general_cargo_cancel')
 };
+
+function weightInTonnes(value, unit) {
+    return unit === 'kg' ? Number(value) / 1000 : Number(value);
+}
+
+function weightForInput(tonnes, unit) {
+    return Number((unit === 'kg' ? tonnes * 1000 : tonnes).toPrecision(15));
+}
+
+function configureWeightUnit(input, unit) {
+    unit.dataset.previousUnit = unit.value;
+    unit.addEventListener('change', () => {
+        if (input.value !== '') {
+            input.value = weightForInput(weightInTonnes(input.value, unit.dataset.previousUnit), unit.value);
+        }
+        unit.dataset.previousUnit = unit.value;
+        renderListaCargas();
+    });
+}
+
+configureWeightUnit(inputs.cPeso, inputs.cPesoUnit);
+configureWeightUnit(generalCargo.peso, generalCargo.pesoUnit);
+
+function getGeneralCargoPreset(file) {
+    if (/container/i.test(file)) {
+        const size = file.match(/(?:^|[^0-9])(10|20|40)(?:[^0-9]|$)/)?.[1] || '20';
+        const preset = LOAD_TYPES.find(type => type.value === `container_dry_${size}`).preset;
+        return { comp: preset[0], larg: preset[1], alt: preset[2] };
+    }
+    if (/palet|pallet/i.test(file)) return { comp: 1.2, larg: 1.2, alt: 1.4, peso: 0.1 };
+    return null;
+}
+
 GENERAL_CARGO_TYPES.forEach(({ value, label }) => {
     const option = document.createElement('option');
     option.value = value;
@@ -550,6 +585,16 @@ generalCargo.model.addEventListener('change', () => {
     [generalCargo.comp, generalCargo.larg, generalCargo.alt, generalCargo.peso].forEach(input => {
         input.value = '';
     });
+    const model = generalCargoByType.get(generalCargo.model.value);
+    if (!model) return;
+    const preset = getGeneralCargoPreset(model.file);
+    if (!preset) return;
+    generalCargo.comp.value = preset.comp;
+    generalCargo.larg.value = preset.larg;
+    generalCargo.alt.value = preset.alt;
+    if (preset.peso !== undefined) {
+        generalCargo.peso.value = weightForInput(preset.peso, generalCargo.pesoUnit.value);
+    }
 });
 
 const tubeInputs = {
@@ -1510,6 +1555,7 @@ function renderListaCargas() {
         li.className = `flex justify-between items-center bg-white border p-2 rounded shadow-sm text-[11px] ${editingCargaIndex === index ? 'border-indigo-500 ring-1 ring-indigo-200' : 'border-indigo-100'}`;
         
         const typeLabel = getCargoLabel(carga.type);
+        const weightUnit = generalCargoByType.has(carga.type) ? generalCargo.pesoUnit.value : inputs.cPesoUnit.value;
         const editButton = document.createElement('button');
         editButton.type = 'button';
         editButton.className = 'flex flex-col flex-1 text-left cursor-pointer';
@@ -1517,7 +1563,7 @@ function renderListaCargas() {
         editButton.setAttribute('aria-label', `Editar ${carga.qtd} ${typeLabel}`);
         editButton.innerHTML = `
             <span class="font-bold text-slate-700">${carga.qtd}x ${typeLabel}</span>
-            <span class="text-slate-500">${carga.comp.toFixed(1)}m x ${carga.larg.toFixed(1)}m x ${carga.alt.toFixed(1)}m &bull; ${carga.camadas || 1} camada(s)${carga.colocarSobreAnterior ? ' &bull; sobre a anterior' : ''} &bull; ${carga.peso}t/unid</span>
+            <span class="text-slate-500">${carga.comp.toFixed(1)}m x ${carga.larg.toFixed(1)}m x ${carga.alt.toFixed(1)}m &bull; ${carga.camadas || 1} camada(s)${carga.colocarSobreAnterior ? ' &bull; sobre a anterior' : ''} &bull; ${weightForInput(carga.peso, weightUnit)} ${weightUnit}/unid</span>
         `;
         editButton.addEventListener('click', () => editarCarga(index));
 
@@ -1559,7 +1605,7 @@ function editarCarga(index) {
         generalCargo.comp.value = carga.comp;
         generalCargo.larg.value = carga.larg;
         generalCargo.alt.value = carga.alt;
-        generalCargo.peso.value = carga.peso;
+        generalCargo.peso.value = weightForInput(carga.peso, generalCargo.pesoUnit.value);
         generalCargo.qtd.value = carga.qtd;
         generalCargo.camadas.value = carga.camadas || 1;
         generalCargo.stack.checked = carga.colocarSobreAnterior === true;
@@ -1575,7 +1621,7 @@ function editarCarga(index) {
     inputs.cComp.value = carga.comp;
     inputs.cLarg.value = carga.larg;
     inputs.cAlt.value = carga.alt;
-    inputs.cPeso.value = carga.peso;
+    inputs.cPeso.value = weightForInput(carga.peso, inputs.cPesoUnit.value);
     inputs.cQtd.value = carga.qtd;
     inputs.cCamadas.value = carga.camadas || 1;
     inputs.cSobreAnterior.checked = carga.colocarSobreAnterior === true;
@@ -1601,7 +1647,7 @@ els.btnAdicionar.addEventListener('click', () => {
     const comp = parseFloat(inputs.cComp.value) || 0.1;
     const larg = parseFloat(inputs.cLarg.value) || 0.1;
     const alt = parseFloat(inputs.cAlt.value) || 0.1;
-    const peso = parseFloat(inputs.cPeso.value) || 0;
+    const peso = weightInTonnes(inputs.cPeso.value, inputs.cPesoUnit.value);
     const qtd = parseInt(inputs.cQtd.value) || 1;
     const camadas = Math.max(1, Number.parseInt(inputs.cCamadas.value, 10) || 1);
     const colocarSobreAnterior = inputs.cSobreAnterior.checked;
@@ -1629,7 +1675,7 @@ generalCargo.form.addEventListener('submit', event => {
         comp: Number(generalCargo.comp.value),
         larg: Number(generalCargo.larg.value),
         alt: Number(generalCargo.alt.value),
-        peso: Number(generalCargo.peso.value),
+        peso: weightInTonnes(generalCargo.peso.value, generalCargo.pesoUnit.value),
         qtd: Number(generalCargo.qtd.value),
         camadas: Number(generalCargo.camadas.value),
         colocarSobreAnterior: generalCargo.stack.checked,
@@ -4446,7 +4492,8 @@ tipoCargaSelect.addEventListener('change', () => {
     const loadType = LOAD_TYPES.find(type => type.value === val);
     if (loadType) {
         const preset = loadType.preset;
-        [inputs.cComp, inputs.cLarg, inputs.cAlt, inputs.cPeso].forEach((el,i) => el.value = preset[i]);
+        [inputs.cComp, inputs.cLarg, inputs.cAlt].forEach((el,i) => el.value = preset[i]);
+        inputs.cPeso.value = weightForInput(preset[3], inputs.cPesoUnit.value);
     }
 });
 
@@ -4633,6 +4680,7 @@ function capturePlanState() {
             larg: inputs.cLarg.value,
             alt: inputs.cAlt.value,
             peso: inputs.cPeso.value,
+            pesoUnit: inputs.cPesoUnit.value,
             qtd: inputs.cQtd.value,
             camadas: inputs.cCamadas.value,
             colocarSobreAnterior: inputs.cSobreAnterior.checked
@@ -4643,6 +4691,7 @@ function capturePlanState() {
             larg: generalCargo.larg.value,
             alt: generalCargo.alt.value,
             peso: generalCargo.peso.value,
+            pesoUnit: generalCargo.pesoUnit.value,
             qtd: generalCargo.qtd.value,
             camadas: generalCargo.camadas.value,
             colocarSobreAnterior: generalCargo.stack.checked
@@ -4669,6 +4718,9 @@ function validatePlanState(state) {
     }
     if (state.generalCargo?.type && !generalCargoByType.has(state.generalCargo.type)) {
         throw new Error('Este planejamento contém um modelo de carga desconhecido.');
+    }
+    if ([state.cargo.pesoUnit, state.generalCargo?.pesoUnit].some(unit => unit !== undefined && !['kg', 't'].includes(unit))) {
+        throw new Error('Este planejamento contém uma unidade de peso inválida.');
     }
     const validVehicleTabs = ['cavalinho', 'prancha', 'carreta', 'caminhao'];
     if (!validVehicleTabs.includes(state.vehicleTab) ||
@@ -4719,7 +4771,14 @@ function restorePlanState(state) {
     inputs.cComp.value = state.cargo.comp;
     inputs.cLarg.value = state.cargo.larg;
     inputs.cAlt.value = state.cargo.alt;
-    inputs.cPeso.value = state.cargo.peso;
+    const restoreWeight = (input, unit, value, savedUnit) => {
+        unit.value = savedUnit || 'kg';
+        unit.dataset.previousUnit = unit.value;
+        input.value = value === undefined || value === null || value === ''
+            ? ''
+            : weightForInput(weightInTonnes(value, savedUnit || 't'), unit.value);
+    };
+    restoreWeight(inputs.cPeso, inputs.cPesoUnit, state.cargo.peso, state.cargo.pesoUnit);
     inputs.cQtd.value = state.cargo.qtd;
     inputs.cCamadas.value = state.cargo.camadas || '1';
     inputs.cSobreAnterior.checked = state.cargo.colocarSobreAnterior === true;
@@ -4727,7 +4786,7 @@ function restorePlanState(state) {
     generalCargo.comp.value = state.generalCargo?.comp || '';
     generalCargo.larg.value = state.generalCargo?.larg || '';
     generalCargo.alt.value = state.generalCargo?.alt || '';
-    generalCargo.peso.value = state.generalCargo?.peso ?? '';
+    restoreWeight(generalCargo.peso, generalCargo.pesoUnit, state.generalCargo?.peso, state.generalCargo?.pesoUnit);
     generalCargo.qtd.value = state.generalCargo?.qtd || '1';
     generalCargo.camadas.value = state.generalCargo?.camadas || '1';
     generalCargo.stack.checked = state.generalCargo?.colocarSobreAnterior === true;

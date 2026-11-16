@@ -221,8 +221,11 @@
                             <input type="number" id="input_carga_altura" value="2.5" step="0.1" min="0.1" class="w-full rounded-md border border-indigo-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
                         </div>
                         <div>
-                            <label class="block text-[10px] font-semibold text-slate-600 mb-1">Peso Unit. (t)</label>
-                            <input type="number" id="input_carga_peso" value="15" step="0.5" min="0" class="w-full rounded-md border border-indigo-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            <label for="input_carga_peso" class="block text-[10px] font-semibold text-slate-600 mb-1">Peso unitário</label>
+                            <div class="flex gap-1">
+                                <input type="number" id="input_carga_peso" value="15000" step="any" min="0" class="w-full min-w-0 rounded-md border border-indigo-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                <select id="input_carga_peso_unit" aria-label="Unidade de peso da carga" class="rounded-md border border-indigo-300 bg-white px-2 py-1 text-sm"><option value="kg">kg</option><option value="t">t</option></select>
+                            </div>
                         </div>
                         
                         <!-- ADICIONADO: Input de Quantidade -->
@@ -257,12 +260,12 @@
                         <select id="general_cargo_model" required class="w-full rounded-md border border-indigo-300 px-3 py-2 text-sm bg-white mb-2">
                             <option value="">Selecione uma carga</option>
                         </select>
-                        <p class="text-xs text-slate-600 mb-2">Informe as medidas reais e o peso de cada peça. O arquivo 3D não fornece esses dados com segurança.</p>
+                        <p class="text-xs text-slate-600 mb-2">Confira as medidas e o peso reais de cada peça. As sugestões são editáveis; containers sem tamanho no nome usam referência de 20 pés e precisam de peso informado.</p>
                         <div class="grid grid-cols-2 gap-2 mb-2">
                             <div><label for="general_cargo_length" class="block text-xs font-semibold text-slate-600">Comprimento (m)</label><input id="general_cargo_length" type="number" min="0.1" step="any" required class="tube-input"></div>
                             <div><label for="general_cargo_width" class="block text-xs font-semibold text-slate-600">Largura (m)</label><input id="general_cargo_width" type="number" min="0.1" step="any" required class="tube-input"></div>
                             <div><label for="general_cargo_height" class="block text-xs font-semibold text-slate-600">Altura (m)</label><input id="general_cargo_height" type="number" min="0.1" step="any" required class="tube-input"></div>
-                            <div><label for="general_cargo_weight" class="block text-xs font-semibold text-slate-600">Peso unitário (t)</label><input id="general_cargo_weight" type="number" min="0" step="any" required class="tube-input"></div>
+                            <div><label for="general_cargo_weight" class="block text-xs font-semibold text-slate-600">Peso unitário</label><div class="flex gap-1"><input id="general_cargo_weight" type="number" min="0" step="any" required class="tube-input min-w-0"><select id="general_cargo_weight_unit" aria-label="Unidade de peso da carga geral" class="rounded-md border border-indigo-300 bg-white px-2 py-1 text-sm"><option value="kg">kg</option><option value="t">t</option></select></div></div>
                             <div><label for="general_cargo_quantity" class="block text-xs font-semibold text-slate-600">Quantidade</label><input id="general_cargo_quantity" type="number" min="1" step="1" value="1" required class="tube-input"></div>
                             <div><label for="general_cargo_layers" class="block text-xs font-semibold text-slate-600">Camadas</label><input id="general_cargo_layers" type="number" min="1" step="1" value="1" required class="tube-input"></div>
                             <label for="general_cargo_stack" class="col-span-2 flex items-center gap-2 text-xs font-semibold text-slate-700"><input id="general_cargo_stack" type="checkbox"> Colocar sobre a carga anterior</label>
