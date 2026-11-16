@@ -385,8 +385,9 @@
             <div class="panel-card flex-grow">
                 <div class="p-2 border-b border-slate-100 flex justify-between items-center bg-slate-50 rounded-t-xl">
                     <h3 id="view_3d_title" class="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-2">Vista 3D (Arraste e Role)</h3>
-                    <div class="flex gap-2">
+                    <div class="flex flex-wrap items-center justify-end gap-2">
                         <span class="px-2 py-1 bg-blue-100 text-blue-800 text-[10px] font-bold rounded" id="tag_tipo_prancha">Veículo</span>
+                        <button id="open_fleet_yard" type="button" class="rounded bg-blue-700 px-3 py-1.5 text-xs font-bold text-white hover:bg-blue-800">Comparar Frota (3D)</button>
                     </div>
                 </div>
                 <div class="p-0 flex flex-col flex-grow relative">
@@ -525,6 +526,23 @@
 
     </div>
 
+    <dialog id="fleet_yard" aria-labelledby="fleet_yard_title">
+        <div class="fleet-yard-layout">
+            <header class="fleet-yard-header">
+                <div>
+                    <h2 id="fleet_yard_title">Pátio da Frota 3D</h2>
+                    <p>Grade: 1 célula = 1 m</p>
+                </div>
+                <div class="fleet-yard-actions">
+                    <button id="replay_fleet_yard" type="button" disabled>Repetir Animação</button>
+                    <button id="close_fleet_yard" type="button">Fechar</button>
+                </div>
+            </header>
+            <div id="fleet_yard_scene">
+                <p id="fleet_yard_status" role="status" aria-live="polite"></p>
+            </div>
+        </div>
+    </dialog>
     <script src="app.js"></script>
     <script>
         if ('serviceWorker' in navigator) {

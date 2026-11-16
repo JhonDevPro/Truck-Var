@@ -1812,13 +1812,30 @@ function updateTrailerInfo() {
     analyzeAndDraw();
 }
 
+function addVehicleSceneLights(targetScene) {
+    targetScene.add(new THREE.AmbientLight(0xffffff, 0.6));
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight.position.set(100, 150, 50);
+    dirLight.castShadow = true;
+    dirLight.shadow.mapSize.width = 2048; dirLight.shadow.mapSize.height = 2048;
+    dirLight.shadow.camera.near = 10; dirLight.shadow.camera.far = 500;
+    const d = 100;
+    dirLight.shadow.camera.left = -d; dirLight.shadow.camera.right = d;
+    dirLight.shadow.camera.top = d; dirLight.shadow.camera.bottom = -d;
+    targetScene.add(dirLight);
+
+    const fillLight = new THREE.DirectionalLight(0xaaccff, 0.3);
+    fillLight.position.set(-100, 50, -100);
+    targetScene.add(fillLight);
+}
+
 function initThreeJS() {
     const container = document.getElementById('three-container');
     scene = new THREE.Scene();
     scene.background = new THREE.Color('#eef2f6');
 
     camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
-    
+
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(container.clientWidth, container.clientHeight);
     renderer.shadowMap.enabled = true;
@@ -1830,20 +1847,7 @@ function initThreeJS() {
     controls.dampingFactor = 0.05;
     controls.maxPolarAngle = Math.PI / 2 + 0.1;
 
-    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    dirLight.position.set(100, 150, 50);
-    dirLight.castShadow = true;
-    dirLight.shadow.mapSize.width = 2048; dirLight.shadow.mapSize.height = 2048;
-    dirLight.shadow.camera.near = 10; dirLight.shadow.camera.far = 500;
-    const d = 100;
-    dirLight.shadow.camera.left = -d; dirLight.shadow.camera.right = d;
-    dirLight.shadow.camera.top = d; dirLight.shadow.camera.bottom = -d;
-    scene.add(dirLight);
-    
-    const fillLight = new THREE.DirectionalLight(0xaaccff, 0.3);
-    fillLight.position.set(-100, 50, -100);
-    scene.add(fillLight);
+    addVehicleSceneLights(scene);
 
     trailerGroup = new THREE.Group();
     scene.add(trailerGroup);
@@ -1870,6 +1874,232 @@ function initThreeJS() {
     }
     animate();
 }
+
+const FLEET_YARD_MODELS = [
+    ['caminhao_saveiro', 'Picape Saveiro'],
+    ['caminhao_vuc_chevrolet', 'VUC F350 Chevrolet'],
+    ['caminhao_toco', 'Caminhão Toco'],
+    ['caminhao_truck', 'Caminhão Truck'],
+    ['carreta_padrao', 'Carreta Padrão'],
+    ['prancha_reb_7_0', 'Prancha Rebaixada (mesa de 7 m)'],
+    ['prancha_reta_12_5', 'Prancha Reta']
+];
+
+const fleetYardDialog = document.getElementById('fleet_yard');
+const fleetYardContainer = document.getElementById('fleet_yard_scene');
+const fleetYardStatus = document.getElementById('fleet_yard_status');
+const fleetYardReplay = document.getElementById('replay_fleet_yard');
+let fleetYard = null;
+
+function resizeFleetYard(yard) {
+    const width = fleetYardContainer.clientWidth;
+    const height = fleetYardContainer.clientHeight;
+    if (!width || !height) return;
+    yard.camera.aspect = width / height;
+    yard.camera.updateProjectionMatrix();
+    yard.renderer.setSize(width, height);
+}
+
+function frameFleetYard(yard, bounds) {
+    const center = bounds.getCenter(new THREE.Vector3());
+    const direction = new THREE.Vector3(1, 1.15, 1.5).normalize();
+    const forward = direction.clone().negate();
+    const right = forward.clone().cross(yard.camera.up).normalize();
+    const up = right.clone().cross(forward).normalize();
+    const tanVertical = Math.tan(THREE.MathUtils.degToRad(yard.camera.fov / 2));
+    const tanHorizontal = tanVertical * yard.camera.aspect;
+    let distance = 0;
+    for (const x of [bounds.min.x, bounds.max.x]) {
+        for (const y of [bounds.min.y, bounds.max.y]) {
+            for (const z of [bounds.min.z, bounds.max.z]) {
+                const offset = new THREE.Vector3(x, y, z).sub(center);
+                distance = Math.max(distance,
+                    offset.dot(direction) + Math.abs(offset.dot(right)) / tanHorizontal,
+                    offset.dot(direction) + Math.abs(offset.dot(up)) / tanVertical);
+            }
+        }
+    }
+    yard.controls.target.copy(center);
+    yard.camera.position.copy(center).addScaledVector(direction, distance * 1.15);
+    yard.camera.lookAt(center);
+    yard.controls.update();
+}
+
+function replayFleetYard(yard) {
+    yard.startedAt = performance.now();
+    yard.autoFrame = null;
+    yard.vehicles.forEach(vehicle => {
+        vehicle.root.position.z = -35;
+        vehicle.wheels.forEach(wheel => { wheel.group.rotation.x = 0; });
+    });
+}
+
+function animateFleetYard(yard, now) {
+    if (!yard.active) return;
+    yard.frame = requestAnimationFrame(time => animateFleetYard(yard, time));
+    if (yard.startedAt !== null) {
+        yard.vehicles.forEach((vehicle, index) => {
+            const progress = Math.max(0, Math.min(1, (now - yard.startedAt - index * 400) / 4000));
+            const distance = 35 * (1 - Math.pow(1 - progress, 3));
+            vehicle.root.position.z = -35 + distance;
+            vehicle.wheels.forEach(wheel => { wheel.group.rotation.x = -distance / wheel.radius; });
+        });
+        if (yard.autoFrame) {
+            const duration = 4000 + (yard.vehicles.length - 1) * 400;
+            const progress = Math.max(0, Math.min(1, (now - yard.startedAt - 1000) / (duration - 1000)));
+            const eased = progress * progress * (3 - 2 * progress);
+            yard.camera.position.lerpVectors(yard.autoFrame.fromPosition, yard.autoFrame.toPosition, eased);
+            yard.controls.target.lerpVectors(yard.autoFrame.fromTarget, yard.autoFrame.toTarget, eased);
+            if (progress === 1) yard.autoFrame = null;
+        }
+    }
+    yard.controls.update();
+    yard.renderer.render(yard.scene, yard.camera);
+}
+
+function disposeFleetYard(yard) {
+    yard.active = false;
+    cancelAnimationFrame(yard.frame);
+    window.removeEventListener('resize', yard.resize);
+    yard.controls.dispose();
+    const geometries = new Set();
+    const materials = new Set();
+    yard.scene.traverse(node => {
+        if (node.userData.sharedResource) return;
+        if (node.geometry && !node.userData.sharedGeometry) geometries.add(node.geometry);
+        if (node.material) {
+            (Array.isArray(node.material) ? node.material : [node.material]).forEach(material => materials.add(material));
+        }
+    });
+    geometries.forEach(geometry => geometry.dispose());
+    materials.forEach(material => material.dispose());
+    yard.textures.forEach(texture => texture.dispose());
+    yard.renderer.dispose();
+    yard.renderer.domElement.remove();
+}
+
+async function openFleetYard() {
+    fleetYardDialog.showModal();
+    fleetYardStatus.textContent = 'Carregando os modelos 3D da frota…';
+    fleetYardReplay.disabled = true;
+    let yard;
+    try {
+        const yardScene = new THREE.Scene();
+        yardScene.background = new THREE.Color('#eef2f6');
+        const yardRenderer = new THREE.WebGLRenderer({ antialias: true });
+        yardRenderer.shadowMap.enabled = true;
+        yardRenderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        fleetYardContainer.prepend(yardRenderer.domElement);
+        const yardCamera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
+        const yardControls = new THREE.OrbitControls(yardCamera, yardRenderer.domElement);
+        yardControls.enableDamping = true;
+        yardControls.dampingFactor = 0.05;
+        yardControls.maxPolarAngle = Math.PI / 2 + 0.1;
+        yard = {
+            scene: yardScene, renderer: yardRenderer, camera: yardCamera, controls: yardControls,
+            active: true, vehicles: [], textures: [], startedAt: null, frame: 0
+        };
+        yardControls.addEventListener('start', () => { yard.autoFrame = null; });
+        fleetYard = yard;
+        yard.resize = () => resizeFleetYard(yard);
+        window.addEventListener('resize', yard.resize);
+        resizeFleetYard(yard);
+        addVehicleSceneLights(yardScene);
+        const ground = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.ShadowMaterial({ opacity: 0.15 }));
+        ground.rotation.x = -Math.PI / 2;
+        ground.receiveShadow = true;
+        yardScene.add(ground);
+        const grid = new THREE.GridHelper(200, 200, 0xcbd5e1, 0xe2e8f0);
+        grid.position.y = 0.01;
+        yardScene.add(grid);
+
+        const results = await Promise.allSettled(FLEET_YARD_MODELS.map(async ([id, name]) => {
+            const tr = bdVeiculos[id];
+            const model = new THREE.Group();
+            const root = new THREE.Group();
+            const context = { group: model, wheels: [], textures: yard.textures, isActive: () => yard.active };
+            root.add(model);
+            yardScene.add(root);
+            try {
+                await draw3D(tr, 'mesa', isMesaOnlyVehicle(tr), context);
+            } catch (error) {
+                root.visible = false;
+                throw error;
+            }
+            if (!yard.active) return null;
+            model.scale.setScalar(1 / 3);
+            model.updateMatrixWorld(true);
+            const bounds = new THREE.Box3().setFromObject(model);
+            if (bounds.isEmpty()) {
+                root.visible = false;
+                throw new Error(`Modelo vazio: ${name}`);
+            }
+            const size = bounds.getSize(new THREE.Vector3());
+            model.position.set(-(bounds.min.x + bounds.max.x) / 2, -bounds.min.y, -bounds.max.z);
+            return { root, wheels: context.wheels, size };
+        }));
+        if (!yard.active) return;
+        const failures = [];
+        results.forEach((result, index) => {
+            if (result.status === 'fulfilled' && result.value) yard.vehicles.push(result.value);
+            else if (result.status === 'rejected') {
+                console.error(`Erro no pátio: ${FLEET_YARD_MODELS[index][1]}`, result.reason);
+                failures.push(FLEET_YARD_MODELS[index][1]);
+            }
+        });
+        fleetYardStatus.textContent = failures.length ? `Não foi possível carregar: ${failures.join(', ')}.` : '';
+        if (!yard.vehicles.length) return;
+        const totalWidth = yard.vehicles.reduce((sum, vehicle) => sum + vehicle.size.x, 0) + (yard.vehicles.length - 1) * 1.8;
+        let x = -totalWidth / 2;
+        let longest = 0;
+        let tallest = 0;
+        yard.vehicles.forEach(vehicle => {
+            vehicle.root.position.x = x + vehicle.size.x / 2;
+            x += vehicle.size.x + 1.8;
+            longest = Math.max(longest, vehicle.size.z);
+            tallest = Math.max(tallest, vehicle.size.y + 2);
+        });
+        frameFleetYard(yard, new THREE.Box3(
+            new THREE.Vector3(-totalWidth / 2, 0, -35 - longest),
+            new THREE.Vector3(totalWidth / 2, tallest, 0)
+        ));
+        const fromPosition = yard.camera.position.clone();
+        const fromTarget = yard.controls.target.clone();
+        frameFleetYard(yard, new THREE.Box3(
+            new THREE.Vector3(-totalWidth / 2, 0, -longest),
+            new THREE.Vector3(totalWidth / 2, tallest, 0)
+        ));
+        const toPosition = yard.camera.position.clone();
+        const toTarget = yard.controls.target.clone();
+        yard.camera.position.copy(fromPosition);
+        yard.controls.target.copy(fromTarget);
+        yard.controls.update();
+        replayFleetYard(yard);
+        yard.autoFrame = { fromPosition, fromTarget, toPosition, toTarget };
+        fleetYardReplay.disabled = false;
+        yard.frame = requestAnimationFrame(time => animateFleetYard(yard, time));
+    } catch (error) {
+        console.error('Erro ao abrir o pátio da frota:', error);
+        if (!yard || yard.active) fleetYardStatus.textContent = 'Não foi possível iniciar o pátio 3D. Feche e tente novamente.';
+    }
+}
+
+document.getElementById('open_fleet_yard').addEventListener('click', openFleetYard);
+fleetYardReplay.addEventListener('click', () => { if (fleetYard) replayFleetYard(fleetYard); });
+function closeFleetYard() {
+    if (fleetYard) disposeFleetYard(fleetYard);
+    fleetYard = null;
+    if (fleetYardDialog.open) fleetYardDialog.close();
+    document.getElementById('open_fleet_yard').focus();
+}
+document.getElementById('close_fleet_yard').addEventListener('click', closeFleetYard);
+fleetYardDialog.addEventListener('cancel', event => {
+    event.preventDefault();
+    closeFleetYard();
+});
+fleetYardDialog.addEventListener('close', () => {
+    if (!fleetYardDialog.open && fleetYard) closeFleetYard();
+});
 
 function renderTubeResults(tube) {
     const format = (value, digits = 0) => Number(value).toLocaleString('pt-BR', {
@@ -2183,8 +2413,12 @@ function analyzeAndDraw() {
 }
 
 // --- Desenho 3D ---
-function draw3D(tr, pos, isCarreta) {
-    const drawRevision = ++draw3DRevision;
+function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trailerGroup, targetLoadGroup = loadGroup) {
+    const trailerGroup = comparison ? comparison.group : targetTrailerGroup;
+    const loadGroup = targetLoadGroup;
+    const drawRevision = comparison ? draw3DRevision : ++draw3DRevision;
+    const isCurrent = () => comparison ? comparison.isActive() : drawRevision === draw3DRevision;
+    const modelPromises = [];
     const cargoStatus = document.getElementById('cargo_model_status');
     let pendingCargoModels = 0;
     const cargoModelErrors = new Set();
@@ -2197,7 +2431,7 @@ function draw3D(tr, pos, isCarreta) {
         cargoStatus.classList.toggle('text-red-700', cargoModelErrors.size > 0);
         cargoStatus.classList.toggle('text-slate-600', cargoModelErrors.size === 0);
     };
-    updateCargoModelStatus();
+    if (!comparison) updateCargoModelStatus();
     const clearGroup = (group) => {
         while (group.children.length) {
             const obj = group.children.pop();
@@ -2211,7 +2445,7 @@ function draw3D(tr, pos, isCarreta) {
         }
     };
     clearGroup(trailerGroup);
-    clearGroup(loadGroup);
+    if (!comparison) clearGroup(loadGroup);
 
     const S = 3;
     const mat = (color, roughness=0.9, metalness=0.0) => new THREE.MeshStandardMaterial({color: color, roughness: roughness, metalness: metalness});
@@ -2247,6 +2481,7 @@ function draw3D(tr, pos, isCarreta) {
             ctx.fillRect(0, i, 128, 12);
         }
         const tex = new THREE.CanvasTexture(canvas);
+        if (comparison) comparison.textures.push(tex);
         tex.wrapS = THREE.RepeatWrapping;
         tex.wrapT = THREE.RepeatWrapping;
         tex.repeat.set(1, 4);
@@ -2324,14 +2559,16 @@ function draw3D(tr, pos, isCarreta) {
     }
     
     function wheel(x,y,z,r=.48,width=.34,group=trailerGroup, connectAxle=true) {
-        const tire = mesh(new THREE.CylinderGeometry(r, r, width, 32, 1), rubber, x, y, z, group);
+        const wheelGroup = comparison ? new THREE.Group() : group;
+        if (comparison) group.add(wheelGroup);
+        const tire = mesh(new THREE.CylinderGeometry(r, r, width, 32, 1), rubber, x, y, z, wheelGroup);
         tire.rotation.z = Math.PI/2;
         
         const hubR = r * 0.55;
-        const hub = mesh(new THREE.CylinderGeometry(hubR, hubR, width*1.02, 24), rim, x, y, z, group);
+        const hub = mesh(new THREE.CylinderGeometry(hubR, hubR, width*1.02, 24), rim, x, y, z, wheelGroup);
         hub.rotation.z = Math.PI/2;
         
-        const centerCap = mesh(new THREE.CylinderGeometry(r*.2, r*.2, width*1.06, 16), steel, x, y, z, group);
+        const centerCap = mesh(new THREE.CylinderGeometry(r*.2, r*.2, width*1.06, 16), steel, x, y, z, wheelGroup);
         centerCap.rotation.z = Math.PI/2;
         
         const boltR = 0.04 * S;
@@ -2341,8 +2578,13 @@ function draw3D(tr, pos, isCarreta) {
             const bx = x > 0 ? x + (width/2 * 1.04) : x - (width/2 * 1.04);
             const by = y + Math.cos(angle) * boltDist;
             const bz = z + Math.sin(angle) * boltDist;
-            const bolt = mesh(new THREE.CylinderGeometry(boltR, boltR, 0.04*S, 6), steel, bx, by, bz, group);
+            const bolt = mesh(new THREE.CylinderGeometry(boltR, boltR, 0.04*S, 6), steel, bx, by, bz, wheelGroup);
             bolt.rotation.z = Math.PI/2;
+        }
+        if (comparison) {
+            wheelGroup.position.set(x, y, z);
+            wheelGroup.children.forEach(child => child.position.sub(wheelGroup.position));
+            comparison.wheels.push({ group: wheelGroup, radius: r / S });
         }
         
         if (connectAxle && x > 0) {
@@ -2540,6 +2782,7 @@ function draw3D(tr, pos, isCarreta) {
         ctx.fillText(`${(width/S).toFixed(2)} m`,650,176);
 
         const signTexture = new THREE.CanvasTexture(signCanvas);
+        if (comparison) comparison.textures.push(signTexture);
         const signMaterial = new THREE.MeshBasicMaterial({map:signTexture,side:THREE.DoubleSide});
         const signWidth = width*0.78;
         const signHeight = 0.78*S;
@@ -2622,28 +2865,32 @@ function draw3D(tr, pos, isCarreta) {
     }
 
     function addRigidTruckModel() {
-        setVehicleModelStatus('Carregando o modelo 3D do veículo…');
-        loadRigidVehicle(tr).then(vehicle => {
-            if (drawRevision !== draw3DRevision) return;
+        if (!comparison) setVehicleModelStatus('Carregando o modelo 3D do veículo…');
+        const promise = loadRigidVehicle(tr).then(vehicle => {
+            if (!isCurrent()) return;
 
             const object = vehicle.clone(true);
             object.scale.setScalar(S);
             object.position.set(0, 0, shiftZ);
             trailerGroup.add(object);
-            setVehicleModelStatus('');
-            frameVehicleView();
+            if (!comparison) {
+                setVehicleModelStatus('');
+                frameVehicleView();
+            }
         }).catch(error => {
             console.error(`Erro ao carregar o modelo ${tr.modelo}:`, error);
-            if (drawRevision !== draw3DRevision) return;
+            if (!isCurrent()) return;
+            if (comparison) throw error;
             setVehicleModelStatus('Não foi possível carregar o modelo 3D; exibindo uma carroceria simplificada.', true);
             drawRigidTruckFallback();
             frameVehicleView();
         });
+        modelPromises.push(promise);
     }
 
     function addChassisModel() {
         const loadChassis = () => loadTrailerChassis().then(source => {
-            if (drawRevision !== draw3DRevision) return;
+            if (!isCurrent()) return;
 
             const chassis = source.clone(true);
             chassis.rotation.y = Math.PI / 2;
@@ -2703,20 +2950,24 @@ function draw3D(tr, pos, isCarreta) {
                 node.material = Array.isArray(node.material) ? updatedMaterials : updatedMaterials[0];
             });
 
-            if (drawRevision === draw3DRevision) trailerGroup.add(chassis);
-        }).catch(error => console.error('Erro ao carregar o chassi da carreta:', error));
+            if (isCurrent()) trailerGroup.add(chassis);
+        }).catch(error => {
+            console.error('Erro ao carregar o chassi da carreta:', error);
+            if (comparison && isCurrent()) throw error;
+        });
 
-        loadChassis();
+        modelPromises.push(loadChassis());
     }
 
     const cabModelId = inputs.cavalinho.value || 'semi_obj';
     if (isRigidTruck) addRigidTruckModel();
     else {
         setVehicleModelStatus('');
-        loadCabModel(cabModelId).then(source => {
-        if (drawRevision !== draw3DRevision) return;
+        const promise = loadCabModel(cabModelId).then(source => {
+        if (!isCurrent()) return;
 
         const object = source.clone(true);
+        if (comparison) object.traverse(node => { if (node.isMesh) node.userData.sharedGeometry = true; });
         
         if (cabModelId === 'semi_obj') {
             const scale = 0.29 * S;
@@ -2915,11 +3166,15 @@ function draw3D(tr, pos, isCarreta) {
             }
         }
 
-        if (drawRevision === draw3DRevision) {
+        if (isCurrent()) {
             trailerGroup.add(object);
-            frameVehicleView();
+            if (!comparison) frameVehicleView();
         }
-    }).catch(error => console.error(`Erro ao carregar o cavalinho ${cabModelId}:`, error));
+    }).catch(error => {
+        console.error(`Erro ao carregar o cavalinho ${cabModelId}:`, error);
+        if (comparison && isCurrent()) throw error;
+    });
+        modelPromises.push(promise);
     }
 
     const deckMat=usesChassisModel ? white : frame;
@@ -3135,6 +3390,8 @@ function draw3D(tr, pos, isCarreta) {
 
         drawRearRamps(wT,tr.tipo==='reta'?pH:hT+0.2*S,rearEnd+shiftZ);
     }
+
+    if (comparison) return Promise.all(modelPromises);
 
     // --- RENDERIZAÇÃO DAS CARGAS COMPOSTAS ---
     let loadFrontZ = shiftZ;

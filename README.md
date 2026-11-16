@@ -36,6 +36,8 @@ Para incluir novos arquivos, adicione também os nomes à lista `GENERAL_CARGO_F
 
 ## Caminhões
 
+A opção **Comparar Frota (3D)** abre o Pátio da Frota sem alterar o planejamento. A cena reúne sete veículos, incluindo as pranchas reta e rebaixada com mesa de 7 m, com o cavalinho selecionado nas composições, grade de 1 metro, controles de órbita e repetição da animação. As dimensões dos modelos são aproximadas: o cadastro não informa o comprimento total dos caminhões ou das composições com cavalinho. Confira as medidas reais antes de utilizá-las no planejamento.
+
 A aba **Caminhões** do seletor de veículos usa caminhões com carroceria própria, sem cavalinho. As medidas informadas são internas; a largura externa soma 3 cm de cada lado e o piso real é 20 cm mais longo que o informado, para dar folga às cargas:
 
 | Veículo | Carroceria útil (C × L interna) | Piso real (C × L externa) | Altura do solo ao piso | Capacidade |
