@@ -183,8 +183,9 @@
                     </div>
                 </div>
 
-                <div class="grid grid-cols-2 gap-1 rounded-lg bg-slate-100 p-1" role="tablist" aria-label="Tipo de carga">
+                <div class="grid grid-cols-3 gap-1 rounded-lg bg-slate-100 p-1" role="tablist" aria-label="Tipo de carga">
                     <button id="tab_cargas" type="button" role="tab" aria-selected="true" aria-controls="panel_cargas" class="load-tab load-tab-active">Cargas</button>
+                    <button id="tab_gerais" type="button" role="tab" aria-selected="false" aria-controls="panel_gerais" class="load-tab">Cargas Gerais</button>
                     <button id="tab_tubos" type="button" role="tab" aria-selected="false" aria-controls="panel_tubos" class="load-tab">Tubos</button>
                 </div>
 
@@ -247,7 +248,31 @@
                         Cancelar edição
                     </button>
                 </div>
+                </div>
 
+                <div id="panel_gerais" role="tabpanel" aria-labelledby="tab_gerais" class="hidden space-y-4">
+                    <form id="general_cargo_form" class="bg-indigo-50 border border-indigo-200 p-3 rounded-md">
+                        <h3 class="text-xs font-bold text-indigo-800 uppercase tracking-wide mb-2">Adicionar carga geral 3D</h3>
+                        <label for="general_cargo_model" class="block text-xs font-semibold text-slate-700 mb-1">Modelo</label>
+                        <select id="general_cargo_model" required class="w-full rounded-md border border-indigo-300 px-3 py-2 text-sm bg-white mb-2">
+                            <option value="">Selecione uma carga</option>
+                        </select>
+                        <p class="text-xs text-slate-600 mb-2">Informe as medidas reais e o peso de cada peça. O arquivo 3D não fornece esses dados com segurança.</p>
+                        <div class="grid grid-cols-2 gap-2 mb-2">
+                            <div><label for="general_cargo_length" class="block text-xs font-semibold text-slate-600">Comprimento (m)</label><input id="general_cargo_length" type="number" min="0.1" step="any" required class="tube-input"></div>
+                            <div><label for="general_cargo_width" class="block text-xs font-semibold text-slate-600">Largura (m)</label><input id="general_cargo_width" type="number" min="0.1" step="any" required class="tube-input"></div>
+                            <div><label for="general_cargo_height" class="block text-xs font-semibold text-slate-600">Altura (m)</label><input id="general_cargo_height" type="number" min="0.1" step="any" required class="tube-input"></div>
+                            <div><label for="general_cargo_weight" class="block text-xs font-semibold text-slate-600">Peso unitário (t)</label><input id="general_cargo_weight" type="number" min="0" step="any" required class="tube-input"></div>
+                            <div><label for="general_cargo_quantity" class="block text-xs font-semibold text-slate-600">Quantidade</label><input id="general_cargo_quantity" type="number" min="1" step="1" value="1" required class="tube-input"></div>
+                            <div><label for="general_cargo_layers" class="block text-xs font-semibold text-slate-600">Camadas</label><input id="general_cargo_layers" type="number" min="1" step="1" value="1" required class="tube-input"></div>
+                            <label for="general_cargo_stack" class="col-span-2 flex items-center gap-2 text-xs font-semibold text-slate-700"><input id="general_cargo_stack" type="checkbox"> Colocar sobre a carga anterior</label>
+                        </div>
+                        <button id="general_cargo_add" type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-md text-sm">Adicionar Carga</button>
+                        <button id="general_cargo_cancel" type="button" class="hidden w-full mt-2 bg-white border border-slate-300 text-slate-600 py-2 px-4 rounded-md text-sm">Cancelar edição</button>
+                    </form>
+                </div>
+
+                <div id="composition_panel" class="space-y-4">
                 <!-- LISTA DE COMPOSIÇÃO -->
                 <div>
                     <h3 class="text-xs font-bold text-slate-700 uppercase tracking-wide mb-2 flex justify-between items-center">
@@ -365,6 +390,7 @@
                     <div id="three-container" class="w-full bg-[#eef2f6] rounded-b-lg relative h-3d-view overflow-hidden">
                         <!-- Canvas 3D -->
                         <div id="vehicle_model_status" role="status" class="hidden absolute top-3 left-3 right-3 z-10 pointer-events-none rounded-md bg-white/90 px-3 py-1.5 text-[11px] font-semibold text-slate-600 shadow-sm"></div>
+                        <div id="cargo_model_status" role="status" aria-live="polite" class="hidden absolute top-12 left-3 right-3 z-10 pointer-events-none rounded-md bg-white/90 px-3 py-1.5 text-[11px] font-semibold text-red-700 shadow-sm"></div>
                         <div class="absolute bottom-3 left-3 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full shadow-sm text-[10px] font-bold text-slate-500 border border-slate-200">
                             GRADE &bull; 1 CÉLULA = 1 M
                         </div>

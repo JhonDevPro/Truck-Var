@@ -43,6 +43,7 @@ if (androidShell) {
     }
     await rm(resolve(output, 'OBJ'), { recursive: true, force: true });
     await rm(resolve(output, 'modelos'), { recursive: true, force: true });
+    await rm(resolve(output, 'cargas'), { recursive: true, force: true });
 } else {
     const scaniaModel = await readFile(resolve(root, 'scania_S-730.glb'));
     await writeFile(
@@ -55,6 +56,7 @@ if (androidShell) {
         gzipSync(trailerChassis, { level: 9 })
     );
     await cp(resolve(root, 'OBJ'), resolve(output, 'OBJ'), { recursive: true });
+    await cp(resolve(root, 'cargas'), resolve(output, 'cargas'), { recursive: true });
     await mkdir(resolve(output, 'modelos'), { recursive: true });
     for (const [source, target] of vehicleModels) {
         const model = await readFile(resolve(root, source));

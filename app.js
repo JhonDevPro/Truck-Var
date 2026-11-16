@@ -360,6 +360,75 @@ const LOAD_TYPES = [
             : 0.02
 }));
 
+const GENERAL_CARGO_FILES = [
+    '01palette.glb', '02container.glb', '20-BLACK-shipping_container.glb', '20-tank_container.glb',
+    '40-RED-container.glb', '40-shipping_container.glb', 'CAÇAMBA-CHEIA.glb', 'CESTA_container.glb',
+    'GRAFITADO-rusty_container.glb', 'LARANJA-container_3d.glb', 'abandoned_wooden_log_pallet.glb',
+    'bobina.glb', 'cardboard_boxes_with_plastic_inside.glb', 'cargo_shipping_container_40ft.glb',
+    'closed_carton_box_3d_model.glb', 'container-10-PES.glb', 'container-20-VELHO (1).glb',
+    'container.glb', 'container_decheterie.glb', 'container_with_cooler_prop.glb',
+    'damaged_cable_roll_2.glb', 'deteriorated_boxes_on_a_pallet.glb', 'fuel_container.glb',
+    'gas_tank.glb', 'green_shipping_container.glb', 'ibc_container_low_poly.glb',
+    'large_fluid_container.glb', 'logs_on_pallet.glb', 'mesh_container.glb', 'palet_box.glb',
+    'palet_wooden_-_11mb.glb', 'palete_game_ready.glb', 'palette.glb', 'pile_bricks_in_pallet.glb',
+    'projeto_estrutural_passarela.glb', 'reservatorio_container_ibc.glb', 'rubble_container.glb',
+    'sea_container_-_low_poly.glb', 'simple_industrial_storage_tank.glb', 'sketchfab_space-container.glb',
+    'small_fluid_container.glb', 'solar_pallete.glb', 'tank_container.glb', 'tarp-covered_palettes.glb',
+    'trash_container (1).glb', 'trash_container.glb', 'wood__boxes_strapped_on_palet.glb'
+];
+const GENERAL_CARGO_TYPES = GENERAL_CARGO_FILES.map(file => ({
+    value: `glb:${file}`,
+    file,
+    label: file.replace(/\.glb$/i, '').replace(/[_-]+/g, ' ')
+}));
+const generalCargoByType = new Map(GENERAL_CARGO_TYPES.map(type => [type.value, type]));
+const generalCargoPromises = new Map();
+
+function getCargoLabel(type) {
+    return generalCargoByType.get(type)?.label || LOAD_TYPES.find(item => item.value === type)?.label || 'Carga';
+}
+
+function loadGeneralCargo(type) {
+    if (!generalCargoPromises.has(type)) {
+        const model = generalCargoByType.get(type);
+        const promise = new Promise((resolve, reject) => {
+            new THREE.GLTFLoader().load(`./cargas/${encodeURIComponent(model.file)}`, gltf => {
+                try {
+                    const oriented = new THREE.Group();
+                    oriented.add(gltf.scene);
+                    let bounds = new THREE.Box3().setFromObject(oriented);
+                    let size = bounds.getSize(new THREE.Vector3());
+                    if (size.x > size.z) {
+                        gltf.scene.rotation.y += Math.PI / 2;
+                        bounds = new THREE.Box3().setFromObject(oriented);
+                        size = bounds.getSize(new THREE.Vector3());
+                    }
+                    if (bounds.isEmpty() || ![size.x, size.y, size.z].every(value => Number.isFinite(value) && value > 0)) {
+                        throw new Error('O modelo não possui dimensões 3D válidas.');
+                    }
+                    const center = bounds.getCenter(new THREE.Vector3());
+                    gltf.scene.position.sub(center);
+                    oriented.traverse(child => {
+                        if (child.isMesh) {
+                            child.userData.sharedResource = true;
+                            child.castShadow = true;
+                            child.receiveShadow = true;
+                        }
+                    });
+                    resolve({ oriented, size });
+                } catch (error) {
+                    reject(error);
+                }
+            }, undefined, reject);
+        });
+        generalCargoPromises.set(type, promise);
+        promise.catch(() => {
+            if (generalCargoPromises.get(type) === promise) generalCargoPromises.delete(type);
+        });
+    }
+    return generalCargoPromises.get(type);
+}
+
 const CONTAINER_LOAD_TYPES = new Set(LOAD_TYPES
     .filter(({ value }) => value.startsWith('container_'))
     .map(({ value }) => value));
@@ -457,6 +526,31 @@ const els = {
     },
     tubeSummary: document.getElementById('tube_analysis_summary')
 };
+
+const generalCargo = {
+    form: document.getElementById('general_cargo_form'),
+    model: document.getElementById('general_cargo_model'),
+    comp: document.getElementById('general_cargo_length'),
+    larg: document.getElementById('general_cargo_width'),
+    alt: document.getElementById('general_cargo_height'),
+    peso: document.getElementById('general_cargo_weight'),
+    qtd: document.getElementById('general_cargo_quantity'),
+    camadas: document.getElementById('general_cargo_layers'),
+    stack: document.getElementById('general_cargo_stack'),
+    add: document.getElementById('general_cargo_add'),
+    cancel: document.getElementById('general_cargo_cancel')
+};
+GENERAL_CARGO_TYPES.forEach(({ value, label }) => {
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = label;
+    generalCargo.model.appendChild(option);
+});
+generalCargo.model.addEventListener('change', () => {
+    [generalCargo.comp, generalCargo.larg, generalCargo.alt, generalCargo.peso].forEach(input => {
+        input.value = '';
+    });
+});
 
 const tubeInputs = {
     diameter: document.getElementById('tube_diameter'),
@@ -1415,7 +1509,7 @@ function renderListaCargas() {
         const li = document.createElement('li');
         li.className = `flex justify-between items-center bg-white border p-2 rounded shadow-sm text-[11px] ${editingCargaIndex === index ? 'border-indigo-500 ring-1 ring-indigo-200' : 'border-indigo-100'}`;
         
-        const typeLabel = LOAD_TYPES.find(t => t.value === carga.type)?.label || 'Carga';
+        const typeLabel = getCargoLabel(carga.type);
         const editButton = document.createElement('button');
         editButton.type = 'button';
         editButton.className = 'flex flex-col flex-1 text-left cursor-pointer';
@@ -1444,6 +1538,8 @@ function renderListaCargas() {
 function atualizarBotaoCarga() {
     els.btnAdicionar.textContent = editingCargaIndex === null ? 'Adicionar Carga' : 'Salvar Alterações';
     els.btnCancelarEdicao.classList.toggle('hidden', editingCargaIndex === null);
+    generalCargo.add.textContent = editingCargaIndex === null ? 'Adicionar Carga' : 'Salvar Alterações';
+    generalCargo.cancel.classList.toggle('hidden', editingCargaIndex === null);
 }
 
 function cancelarEdicaoCarga() {
@@ -1456,6 +1552,23 @@ function editarCarga(index) {
     const carga = composicaoCargas[index];
     if (!carga) return;
 
+    if (generalCargoByType.has(carga.type)) {
+        setCargaTab('gerais');
+        editingCargaIndex = index;
+        generalCargo.model.value = carga.type;
+        generalCargo.comp.value = carga.comp;
+        generalCargo.larg.value = carga.larg;
+        generalCargo.alt.value = carga.alt;
+        generalCargo.peso.value = carga.peso;
+        generalCargo.qtd.value = carga.qtd;
+        generalCargo.camadas.value = carga.camadas || 1;
+        generalCargo.stack.checked = carga.colocarSobreAnterior === true;
+        atualizarBotaoCarga();
+        renderListaCargas();
+        generalCargo.add.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        return;
+    }
+    setCargaTab('cargas');
     editingCargaIndex = index;
     tipoCargaSelect.value = carga.type;
     tipoCargaSelect.dispatchEvent(new Event('change'));
@@ -1507,6 +1620,29 @@ els.btnAdicionar.addEventListener('click', () => {
     renderListaCargas();
     analyzeAndDraw();
 });
+
+generalCargo.form.addEventListener('submit', event => {
+    event.preventDefault();
+    if (!generalCargo.form.reportValidity() || !generalCargoByType.has(generalCargo.model.value)) return;
+    const carga = {
+        type: generalCargo.model.value,
+        comp: Number(generalCargo.comp.value),
+        larg: Number(generalCargo.larg.value),
+        alt: Number(generalCargo.alt.value),
+        peso: Number(generalCargo.peso.value),
+        qtd: Number(generalCargo.qtd.value),
+        camadas: Number(generalCargo.camadas.value),
+        colocarSobreAnterior: generalCargo.stack.checked,
+        armador: 'generico'
+    };
+    if (editingCargaIndex === null) composicaoCargas.push(carga);
+    else composicaoCargas[editingCargaIndex] = carga;
+    editingCargaIndex = null;
+    atualizarBotaoCarga();
+    renderListaCargas();
+    analyzeAndDraw();
+});
+generalCargo.cancel.addEventListener('click', cancelarEdicaoCarga);
 
 els.btnCancelarEdicao.addEventListener('click', cancelarEdicaoCarga);
 
@@ -1673,7 +1809,7 @@ function renderCargoAnalysisSummary(loadSequence, totalWeight) {
     els.cargoSummary.empty.classList.toggle('hidden', loadSequence.loads.length > 0);
 
     loadSequence.loads.forEach(({ carga }) => {
-        const typeLabel = LOAD_TYPES.find(type => type.value === carga.type)?.label || 'Carga';
+        const typeLabel = getCargoLabel(carga.type);
         const item = document.createElement('li');
         item.className = 'flex justify-between gap-2 border-t border-slate-100 pt-2';
         const description = document.createElement('span');
@@ -1949,6 +2085,19 @@ function analyzeAndDraw() {
 // --- Desenho 3D ---
 function draw3D(tr, pos, isCarreta) {
     const drawRevision = ++draw3DRevision;
+    const cargoStatus = document.getElementById('cargo_model_status');
+    let pendingCargoModels = 0;
+    const cargoModelErrors = new Set();
+    const updateCargoModelStatus = () => {
+        const messages = [];
+        if (pendingCargoModels) messages.push('Carregando modelos 3D das cargas…');
+        if (cargoModelErrors.size) messages.push(`Não foi possível carregar: ${[...cargoModelErrors].join(', ')}.`);
+        cargoStatus.textContent = messages.join(' ');
+        cargoStatus.classList.toggle('hidden', messages.length === 0);
+        cargoStatus.classList.toggle('text-red-700', cargoModelErrors.size > 0);
+        cargoStatus.classList.toggle('text-slate-600', cargoModelErrors.size === 0);
+    };
+    updateCargoModelStatus();
     const clearGroup = (group) => {
         while (group.children.length) {
             const obj = group.children.pop();
@@ -2906,6 +3055,7 @@ function draw3D(tr, pos, isCarreta) {
         const loadZ_start = loadFrontZ-startOffset*S;
         
         const baseItem = new THREE.Group();
+        const generalInstances = [];
         
         function cargoBox(w,h,d,material,x=0,y=0,z=0){
             return mesh(new THREE.BoxGeometry(Math.max(.04,w),Math.max(.04,h),Math.max(.04,d)),material,x,y,z,baseItem);
@@ -3037,7 +3187,9 @@ function draw3D(tr, pos, isCarreta) {
         const equipmentBeige = mat(0xc5a66a,0.62,0.18);
         const equipmentSteel = mat(0x73808b,0.35,0.72);
 
-        if (carga.type.startsWith('bobina_')){
+        if (generalCargoByType.has(carga.type)) {
+            // O modelo é anexado às instâncias após o carregamento assíncrono.
+        } else if (carga.type.startsWith('bobina_')){
             const coilCount = splitCoils ? 1 : (carga.type.endsWith('_2') ? 2 : 1);
             const axis = carga.type.includes('_lado_') ? 'x' : 'z';
             const sectionLength = splitCoils ? cL/2 : cL/coilCount;
@@ -3568,8 +3720,29 @@ function draw3D(tr, pos, isCarreta) {
                     const inst = baseItem.clone();
                     inst.position.set(itemX, loadY + layer * cH, itemZ);
                     loadGroup.add(inst);
+                    if (generalCargoByType.has(carga.type)) generalInstances.push(inst);
                 }
             }
+        }
+        if (generalInstances.length) {
+            pendingCargoModels++;
+            updateCargoModelStatus();
+            loadGeneralCargo(carga.type).then(({ oriented, size }) => {
+                if (drawRevision !== draw3DRevision) return;
+                generalInstances.forEach(instance => {
+                    const model = oriented.clone(true);
+                    model.scale.set(cW / size.x, cH / size.y, cL / size.z);
+                    instance.add(model);
+                });
+                pendingCargoModels--;
+                updateCargoModelStatus();
+            }).catch(error => {
+                console.error(`Falha ao carregar a carga 3D ${getCargoLabel(carga.type)}.`, error);
+                if (drawRevision !== draw3DRevision) return;
+                pendingCargoModels--;
+                cargoModelErrors.add(getCargoLabel(carga.type));
+                updateCargoModelStatus();
+            });
         }
     });
 
@@ -4291,6 +4464,7 @@ els.btnReset.addEventListener('click', () => {
 
 function setCargaTab(tab) {
     const isTubes = tab === 'tubos';
+    if (tab !== activeCargaTab && editingCargaIndex !== null) cancelarEdicaoCarga();
     if (isTubes && !cargoTrailerSelectionBeforeTubes) {
         cargoTrailerSelectionBeforeTubes = {
             prancha: inputs.placa_prancha.value,
@@ -4313,18 +4487,24 @@ function setCargaTab(tab) {
     }
     activeCargaTab = tab;
     const tabCargas = document.getElementById('tab_cargas');
+    const tabGerais = document.getElementById('tab_gerais');
     const tabTubos = document.getElementById('tab_tubos');
     const panelCargas = document.getElementById('panel_cargas');
+    const panelGerais = document.getElementById('panel_gerais');
     const panelTubos = document.getElementById('panel_tubos');
     const tabClass = 'load-tab load-tab-active';
     const inactiveClass = 'load-tab';
 
-    tabCargas.className = isTubes ? inactiveClass : tabClass;
+    tabCargas.className = tab === 'cargas' ? tabClass : inactiveClass;
+    tabGerais.className = tab === 'gerais' ? tabClass : inactiveClass;
     tabTubos.className = isTubes ? tabClass : inactiveClass;
-    tabCargas.setAttribute('aria-selected', String(!isTubes));
+    tabCargas.setAttribute('aria-selected', String(tab === 'cargas'));
+    tabGerais.setAttribute('aria-selected', String(tab === 'gerais'));
     tabTubos.setAttribute('aria-selected', String(isTubes));
-    panelCargas.classList.toggle('hidden', isTubes);
+    panelCargas.classList.toggle('hidden', tab !== 'cargas');
+    panelGerais.classList.toggle('hidden', tab !== 'gerais');
     panelTubos.classList.toggle('hidden', !isTubes);
+    document.getElementById('composition_panel').classList.toggle('hidden', isTubes);
     els.cargoSummary.container.classList.toggle('hidden', isTubes);
     els.tubeSummary.classList.toggle('hidden', !isTubes);
     document.getElementById('view_3d_title').textContent = isTubes
@@ -4340,6 +4520,7 @@ function setCargaTab(tab) {
 }
 
 document.getElementById('tab_cargas').addEventListener('click', () => setCargaTab('cargas'));
+document.getElementById('tab_gerais').addEventListener('click', () => setCargaTab('gerais'));
 document.getElementById('tab_tubos').addEventListener('click', () => setCargaTab('tubos'));
 document.getElementById('tube_strapping_on').addEventListener('click', () => {
     tubeStrappingEnabled = true;
@@ -4456,6 +4637,16 @@ function capturePlanState() {
             camadas: inputs.cCamadas.value,
             colocarSobreAnterior: inputs.cSobreAnterior.checked
         },
+        generalCargo: {
+            type: generalCargo.model.value,
+            comp: generalCargo.comp.value,
+            larg: generalCargo.larg.value,
+            alt: generalCargo.alt.value,
+            peso: generalCargo.peso.value,
+            qtd: generalCargo.qtd.value,
+            camadas: generalCargo.camadas.value,
+            colocarSobreAnterior: generalCargo.stack.checked
+        },
         tubes: Object.fromEntries(
             Object.entries(tubeInputs).map(([key, input]) => [key, input.value])
         ),
@@ -4467,7 +4658,7 @@ function capturePlanState() {
 }
 
 function validatePlanState(state) {
-    if (!state || state.version !== 1 || !['cargas', 'tubos'].includes(state.activeTab)) {
+    if (!state || state.version !== 1 || !['cargas', 'gerais', 'tubos'].includes(state.activeTab)) {
         throw new Error('Este planejamento tem um formato inválido ou incompatível.');
     }
     if (!state.trailer || !state.cargo || !Array.isArray(state.cargo.items) || !state.tubes) {
@@ -4475,6 +4666,9 @@ function validatePlanState(state) {
     }
     if (state.cargo.items.length > 500 || !LOAD_TYPES.some(type => type.value === state.cargo.type)) {
         throw new Error('Este planejamento contém dados inválidos.');
+    }
+    if (state.generalCargo?.type && !generalCargoByType.has(state.generalCargo.type)) {
+        throw new Error('Este planejamento contém um modelo de carga desconhecido.');
     }
     const validVehicleTabs = ['cavalinho', 'prancha', 'carreta', 'caminhao'];
     if (!validVehicleTabs.includes(state.vehicleTab) ||
@@ -4487,7 +4681,7 @@ function validatePlanState(state) {
         throw new Error('Este planejamento contém um veículo inválido.');
     }
     const validItems = state.cargo.items.every(item =>
-        item && LOAD_TYPES.some(type => type.value === item.type) &&
+        item && (generalCargoByType.has(item.type) || LOAD_TYPES.some(type => type.value === item.type)) &&
         Number.isFinite(item.comp) && item.comp > 0 &&
         Number.isFinite(item.larg) && item.larg > 0 &&
         Number.isFinite(item.alt) && item.alt > 0 &&
@@ -4529,6 +4723,14 @@ function restorePlanState(state) {
     inputs.cQtd.value = state.cargo.qtd;
     inputs.cCamadas.value = state.cargo.camadas || '1';
     inputs.cSobreAnterior.checked = state.cargo.colocarSobreAnterior === true;
+    generalCargo.model.value = state.generalCargo?.type || '';
+    generalCargo.comp.value = state.generalCargo?.comp || '';
+    generalCargo.larg.value = state.generalCargo?.larg || '';
+    generalCargo.alt.value = state.generalCargo?.alt || '';
+    generalCargo.peso.value = state.generalCargo?.peso ?? '';
+    generalCargo.qtd.value = state.generalCargo?.qtd || '1';
+    generalCargo.camadas.value = state.generalCargo?.camadas || '1';
+    generalCargo.stack.checked = state.generalCargo?.colocarSobreAnterior === true;
     divArmador.classList.toggle(
         'hidden',
         !CONTAINER_LOAD_TYPES.has(state.cargo.type) || UNBRANDED_CONTAINER_TYPES.has(state.cargo.type)

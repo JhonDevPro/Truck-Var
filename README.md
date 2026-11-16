@@ -30,6 +30,9 @@ A tabela aplica Row Level Security (RLS): cada conta só pode consultar, alterar
 
 Na área de cargas, as abas **Cargas** e **Tubos** mantêm os planejamentos separados. Tubos são planejados somente para carretas de 14 m ou 15 m; o comprimento é definido automaticamente como 13 m ou 14 m, respectivamente. O cálculo usa o diâmetro externo efetivo, a largura útil e a altura informadas para estimar tubos por camada, camadas, capacidade, peso e viagens. A aba também mostra o arranjo na carroceria em 3D e o corte frontal, com opção para ilustrar quatro cintas e redes drapeadas e presas nas duas pontas; revise as dimensões, os dormentes e a amarração antes do transporte.
 
+A aba **Cargas Gerais** lista os modelos GLB em `cargas/` e permite adicioná-los à mesma composição das cargas existentes. Informe comprimento, largura, altura e peso reais por peça: os modelos são redimensionados para essas medidas, que não podem ser determinadas com segurança pelo arquivo 3D. A dimensão horizontal mais longa do modelo é orientada no comprimento do veículo. Os modelos são baixados sob demanda; a publicação web inclui a pasta de cargas.
+Para incluir novos arquivos, adicione também os nomes à lista `GENERAL_CARGO_FILES` em `app.js`.
+
 ## Caminhões
 
 A aba **Caminhões** do seletor de veículos usa caminhões com carroceria própria, sem cavalinho. As medidas informadas são internas; a largura externa soma 3 cm de cada lado e o piso real é 20 cm mais longo que o informado, para dar folga às cargas:
