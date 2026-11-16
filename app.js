@@ -384,6 +384,35 @@ const GENERAL_CARGO_TYPES = GENERAL_CARGO_FILES.map(file => ({
 const generalCargoByType = new Map(GENERAL_CARGO_TYPES.map(type => [type.value, type]));
 const generalCargoPromises = new Map();
 
+// Correct horizontal rotations baked into these particular source models.
+const GENERAL_CARGO_ROTATIONS = new Map([
+    ['02container.glb', -39.25385],
+    ['CAÇAMBA-CHEIA.glb', -33.21165],
+    ['bobina.glb', -15.03860],
+    ['container_with_cooler_prop.glb', 39.98947],
+    ['damaged_cable_roll_2.glb', 12.25403],
+    ['deteriorated_boxes_on_a_pallet.glb', -9.94359],
+    ['large_fluid_container.glb', -44.24086],
+    ['small_fluid_container.glb', 43.11983]
+]);
+
+function getGeneralCargoBounds(group, precise) {
+    if (!precise) return new THREE.Box3().setFromObject(group);
+
+    const bounds = new THREE.Box3();
+    const vertex = new THREE.Vector3();
+    group.updateMatrixWorld(true);
+    group.traverse(child => {
+        if (!child.isMesh || !child.geometry.attributes.position) return;
+        const positions = child.geometry.attributes.position;
+        for (let i = 0; i < positions.count; i++) {
+            vertex.fromBufferAttribute(positions, i).applyMatrix4(child.matrixWorld);
+            bounds.expandByPoint(vertex);
+        }
+    });
+    return bounds;
+}
+
 function getCargoLabel(type) {
     return generalCargoByType.get(type)?.label || LOAD_TYPES.find(item => item.value === type)?.label || 'Carga';
 }
@@ -395,19 +424,23 @@ function loadGeneralCargo(type) {
             new THREE.GLTFLoader().load(`./cargas/${encodeURIComponent(model.file)}`, gltf => {
                 try {
                     const oriented = new THREE.Group();
-                    oriented.add(gltf.scene);
-                    let bounds = new THREE.Box3().setFromObject(oriented);
+                    const aligned = new THREE.Group();
+                    aligned.add(gltf.scene);
+                    oriented.add(aligned);
+                    const rotation = GENERAL_CARGO_ROTATIONS.get(model.file);
+                    aligned.rotation.y = THREE.MathUtils.degToRad(rotation ?? 0);
+                    let bounds = getGeneralCargoBounds(oriented, rotation !== undefined);
                     let size = bounds.getSize(new THREE.Vector3());
                     if (size.x > size.z) {
-                        gltf.scene.rotation.y += Math.PI / 2;
-                        bounds = new THREE.Box3().setFromObject(oriented);
+                        aligned.rotation.y += Math.PI / 2;
+                        bounds = getGeneralCargoBounds(oriented, rotation !== undefined);
                         size = bounds.getSize(new THREE.Vector3());
                     }
                     if (bounds.isEmpty() || ![size.x, size.y, size.z].every(value => Number.isFinite(value) && value > 0)) {
                         throw new Error('O modelo não possui dimensões 3D válidas.');
                     }
                     const center = bounds.getCenter(new THREE.Vector3());
-                    gltf.scene.position.sub(center);
+                    aligned.position.sub(center);
                     oriented.traverse(child => {
                         if (child.isMesh) {
                             child.userData.sharedResource = true;
