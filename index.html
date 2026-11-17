@@ -295,6 +295,44 @@
                     </ul>
                 </div>
 
+                <details id="lashing_panel" class="rounded-md border border-amber-300 bg-amber-50 p-3">
+                    <summary class="cursor-pointer text-xs font-bold uppercase text-amber-900">Adicionar Amarração</summary>
+                    <form id="lashing_form" class="mt-3 space-y-2">
+                        <p class="text-xs text-amber-900">Simulação por peça, não é plano aprovado. Confirme dados e fixação com profissional habilitado.</p>
+                        <label class="block text-xs font-semibold">Carga <select id="lashing_item" class="tube-input" required></select></label>
+                        <label class="block text-xs font-semibold">Equipamento
+                            <select id="lashing_equipment" class="tube-input">
+                                <option value="strap5">Cinta têxtil 5 t (50 mm)</option>
+                                <option value="strap10">Cinta têxtil 10 t (75–100 mm)</option>
+                                <option value="chain8">Corrente grau 8 (8 mm)</option>
+                                <option value="chain10">Corrente grau 8 (10 mm)</option>
+                                <option value="chain13">Corrente grau 8 (13 mm)</option>
+                            </select>
+                        </label>
+                        <label class="block text-xs font-semibold">Método <select id="lashing_method" class="tube-input"><option value="top">Por cima (atrito)</option><option value="direct">Direta / diagonal</option></select></label>
+                        <label class="block text-xs font-semibold">Superfície <select id="lashing_surface" class="tube-input"><option value="wood">Madeira (μ 0,25)</option><option value="steel">Aço / chapa (μ 0,20)</option><option value="rubber">Tapete antiderrapante (μ 0,55)</option></select></label>
+                        <div class="grid grid-cols-2 gap-2">
+                            <label class="text-xs font-semibold">STF (daN; obrigatório por cima)<input id="lashing_stf" type="number" min="1" step="any" class="tube-input"></label>
+                            <label class="text-xs font-semibold">LC por amarra (daN)<input id="lashing_lc" type="number" min="1" step="any" class="tube-input" required></label>
+                            <label class="text-xs font-semibold">Ângulo vertical α (°)<input id="lashing_alpha" type="number" min="1" max="90" step="any" class="tube-input" required></label>
+                            <label class="text-xs font-semibold">Transferência k<select id="lashing_k" class="tube-input"><option value="1.5">1,5 (uma catraca)</option><option value="2">2 (duas catracas)</option></select></label>
+                            <label class="text-xs font-semibold">Quantidade por peça<input id="lashing_count" type="number" min="1" max="100" step="1" class="tube-input" required></label>
+                            <label class="text-xs font-semibold">Altura do CG (m)<input id="lashing_cg" type="number" min="0.01" step="any" class="tube-input" placeholder="Não informado"></label>
+                        </div>
+                        <label class="flex items-center gap-2 text-xs font-semibold"><input id="lashing_front" type="checkbox"> Calço / berço frontal</label>
+                        <label class="block text-xs">Capacidade frontal (t) <input id="lashing_front_capacity" type="number" min="0" step="any" class="tube-input" placeholder="Não informada"></label>
+                        <label class="flex items-center gap-2 text-xs font-semibold"><input id="lashing_side" type="checkbox"> Calço lateral</label>
+                        <label class="block text-xs">Capacidade lateral (t) <input id="lashing_side_capacity" type="number" min="0" step="any" class="tube-input" placeholder="Não informada"></label>
+                        <p class="text-xs text-amber-900">LC, STF, pontos e capacidades são referências editáveis, não dados certificados. O desenho não comprova contato nem ancoragem.</p>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button id="lashing_calculate" type="button" class="rounded-md bg-amber-700 p-2 text-xs font-bold text-white">Calcular estimativa</button>
+                            <button type="submit" class="rounded-md bg-blue-700 p-2 text-xs font-bold text-white">Salvar amarração</button>
+                        </div>
+                        <button id="lashing_remove" type="button" class="w-full rounded-md border border-red-300 bg-white p-2 text-xs font-bold text-red-700">Remover amarração</button>
+                        <p id="lashing_form_message" role="status" class="text-xs font-semibold text-amber-900"></p>
+                    </form>
+                </details>
+
                 <button id="btn_reset" class="w-full mt-4 bg-white border border-red-300 text-red-600 hover:bg-red-50 font-semibold py-2 px-4 rounded-md text-sm transition-colors">
                     Limpar Toda a Carga
                 </button>
@@ -469,6 +507,7 @@
                     <p id="cargo_summary_empty" class="mt-2 text-[10px] italic text-slate-500">Nenhuma carga adicionada.</p>
                 </section>
                 <div id="spillover_alert" class="hidden rounded-md border border-amber-300 bg-amber-50 p-3 text-xs font-semibold text-amber-900" role="status" aria-live="polite"></div>
+                <section id="lashing_analysis" class="hidden rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-950" aria-live="polite"></section>
 
                 <section id="tube_analysis_summary" class="hidden rounded-md border border-slate-200 bg-white p-3 shadow-sm">
                     <h3 class="mb-2 text-xs font-bold uppercase tracking-wide text-slate-700">Estimativa de tubos por carreta</h3>
