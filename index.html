@@ -388,6 +388,7 @@
                     <div class="flex flex-wrap items-center justify-end gap-2">
                         <span class="px-2 py-1 bg-blue-100 text-blue-800 text-[10px] font-bold rounded" id="tag_tipo_prancha">Veículo</span>
                         <button id="open_fleet_yard" type="button" class="rounded bg-blue-700 px-3 py-1.5 text-xs font-bold text-white hover:bg-blue-800">Comparar Frota (3D)</button>
+                        <button id="open_transport_animation" type="button" class="rounded bg-blue-700 px-3 py-1.5 text-xs font-bold text-white hover:bg-blue-800">Animar Transporte</button>
                     </div>
                 </div>
                 <div class="p-0 flex flex-col flex-grow relative">
@@ -540,6 +541,22 @@
             </header>
             <div id="fleet_yard_scene">
                 <p id="fleet_yard_status" role="status" aria-live="polite"></p>
+            </div>
+        </div>
+    </dialog>
+    <dialog id="transport_animation" aria-labelledby="transport_animation_title">
+        <div class="fleet-yard-layout">
+            <header class="fleet-yard-header">
+                <div>
+                    <h2 id="transport_animation_title">Animar Transporte</h2>
+                    <p>Arraste para girar a câmera e use a roda do mouse para aproximar ou afastar.</p>
+                </div>
+                <div class="fleet-yard-actions">
+                    <button id="close_transport_animation" type="button">Fechar</button>
+                </div>
+            </header>
+            <div id="transport_animation_scene">
+                <p id="transport_animation_status" role="status" aria-live="polite"></p>
             </div>
         </div>
     </dialog>

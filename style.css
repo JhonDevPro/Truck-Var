@@ -7,7 +7,7 @@ body { font-family: 'Inter', sans-serif; background-color: #f8fafc; overflow-x: 
 #three-container { cursor: grab; }
 #three-container:active { cursor: grabbing; }
 
-#fleet_yard {
+#fleet_yard, #transport_animation {
     width: 100vw;
     max-width: none;
     height: 100vh;
@@ -18,7 +18,7 @@ body { font-family: 'Inter', sans-serif; background-color: #f8fafc; overflow-x: 
     border: 0;
     background: #eef2f6;
 }
-#fleet_yard::backdrop { background: rgb(15 23 42 / 0.6); }
+#fleet_yard::backdrop, #transport_animation::backdrop { background: rgb(15 23 42 / 0.6); }
 .fleet-yard-layout { display: flex; flex-direction: column; height: 100%; }
 .fleet-yard-header {
     display: flex;
@@ -42,10 +42,10 @@ body { font-family: 'Inter', sans-serif; background-color: #f8fafc; overflow-x: 
     background: white;
 }
 .fleet-yard-actions button:disabled { opacity: 0.5; }
-#fleet_yard_scene { position: relative; flex: 1; min-height: 0; overflow: hidden; cursor: grab; }
-#fleet_yard_scene:active { cursor: grabbing; }
-#fleet_yard_scene canvas { display: block; }
-#fleet_yard_status {
+#fleet_yard_scene, #transport_animation_scene { position: relative; flex: 1; min-height: 0; overflow: hidden; cursor: grab; }
+#fleet_yard_scene:active, #transport_animation_scene:active { cursor: grabbing; }
+#fleet_yard_scene canvas, #transport_animation_scene canvas { display: block; }
+#fleet_yard_status, #transport_animation_status {
     position: absolute;
     top: 0.75rem;
     left: 0.75rem;
@@ -57,7 +57,7 @@ body { font-family: 'Inter', sans-serif; background-color: #f8fafc; overflow-x: 
     font-size: 0.75rem;
     font-weight: 600;
 }
-#fleet_yard_status:empty { display: none; }
+#fleet_yard_status:empty, #transport_animation_status:empty { display: none; }
 
 .panel-card {
     background-color: white;

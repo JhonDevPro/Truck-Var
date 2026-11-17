@@ -2150,6 +2150,441 @@ fleetYardDialog.addEventListener('close', () => {
     if (!fleetYardDialog.open && fleetYard) closeFleetYard();
 });
 
+const transportDialog = document.getElementById('transport_animation');
+const transportContainer = document.getElementById('transport_animation_scene');
+const transportStatus = document.getElementById('transport_animation_status');
+let transportAnimation = null;
+
+function resizeTransportAnimation(animation) {
+    const width = transportContainer.clientWidth;
+    const height = transportContainer.clientHeight;
+    if (!width || !height) return;
+    animation.camera.aspect = width / height;
+    animation.camera.updateProjectionMatrix();
+    animation.renderer.setSize(width, height);
+}
+
+function separateFortniteWheels(cab) {
+    const body = cab.getObjectByName('Object_2');
+    const geometry = body?.geometry;
+    const positions = geometry?.attributes.position;
+    const indices = geometry?.index;
+    if (!body?.isMesh || !positions || !indices) {
+        throw new Error('Não foi possível localizar a malha do cavalinho Fortnite.');
+    }
+
+    const parents = Array.from({ length: positions.count }, (_, index) => index);
+    const vertices = new Map();
+    const find = index => {
+        while (parents[index] !== index) {
+            parents[index] = parents[parents[index]];
+            index = parents[index];
+        }
+        return index;
+    };
+    const join = (a, b) => { parents[find(b)] = find(a); };
+    for (let i = 0; i < positions.count; i++) {
+        const key = [positions.getX(i), positions.getY(i), positions.getZ(i)]
+            .map(value => value.toFixed(5)).join(',');
+        if (vertices.has(key)) join(i, vertices.get(key));
+        else vertices.set(key, i);
+    }
+    for (let i = 0; i < indices.count; i += 3) {
+        join(indices.getX(i), indices.getX(i + 1));
+        join(indices.getX(i), indices.getX(i + 2));
+    }
+    const components = new Map();
+    for (let i = 0; i < positions.count; i++) {
+        const root = find(i);
+        if (!components.has(root)) components.set(root, { count: 0, bounds: new THREE.Box3() });
+        const component = components.get(root);
+        component.count++;
+        component.bounds.expandByPoint(new THREE.Vector3().fromBufferAttribute(positions, i));
+    }
+    // O GLB do Fortnite contém seis rodas como componentes desconectados de uma única malha.
+    const wheelRoots = [...components.entries()].filter(([, component]) => {
+        const size = component.bounds.getSize(new THREE.Vector3());
+        const center = component.bounds.getCenter(new THREE.Vector3());
+        return (component.count === 194 || component.count === 245) &&
+            center.z < 2 && size.z > 3.5 && size.z < 4 && size.y > 3.5 && size.y < 4;
+    }).map(([root]) => root);
+    if (wheelRoots.length !== 6) {
+        throw new Error('Não foi possível identificar as seis rodas do cavalinho Fortnite.');
+    }
+
+    const wheelIndices = wheelRoots.map(() => []);
+    const bodyIndices = [];
+    for (let i = 0; i < indices.count; i += 3) {
+        const wheelIndex = wheelRoots.indexOf(find(indices.getX(i)));
+        const target = wheelIndex < 0 ? bodyIndices : wheelIndices[wheelIndex];
+        target.push(indices.getX(i), indices.getX(i + 1), indices.getX(i + 2));
+    }
+    const subsetGeometry = (subset, bounds) => {
+        const result = geometry.clone();
+        result.setIndex(subset);
+        result.boundingBox = bounds;
+        result.boundingSphere = bounds.getBoundingSphere(new THREE.Sphere());
+        return result;
+    };
+    wheelIndices.forEach((wheelIndex, index) => {
+        const wheel = body.clone();
+        wheel.name = `fortnite_wheel_${index}`;
+        wheel.geometry = subsetGeometry(wheelIndex, components.get(wheelRoots[index]).bounds.clone());
+        wheel.userData.sharedGeometry = false;
+        body.parent.add(wheel);
+    });
+    const bodyBounds = new THREE.Box3();
+    bodyIndices.forEach(index => bodyBounds.expandByPoint(new THREE.Vector3().fromBufferAttribute(positions, index)));
+    body.geometry = subsetGeometry(bodyIndices, bodyBounds);
+    body.userData.sharedGeometry = false;
+}
+
+function addTransportModelWheels(model, wheels, cab, cabModelId) {
+    if (cab && cabModelId === 'fortnite_semi_truck') separateFortniteWheels(cab);
+    model.updateMatrixWorld(true);
+    const parts = [];
+    model.traverse(node => {
+        const materialName = node.isMesh && !Array.isArray(node.material) ? node.material?.name : '';
+        const scaniaPart = /^(RODA|PNEU|PARAFUSO|CUBO)\d+_\d+$/i.test(node.name);
+        const chassisPart = /^(Rims|Tyre_tread|Tyre_sidewalls)$/i.test(materialName || '');
+        const objBolt = node.isMesh && /pCylinder(?:28|29|30|31|32|33|34|35)\b/i.test(node.name);
+        const objPart = objBolt || (node.isMesh && /pCylinder(?:15|16|17|18|19)\b/i.test(node.name));
+        const gamePart = node.isMesh && /^(?:Car7|Car10)_Wheel_(?:(?:LOD|Moving)_)?\d+_\d+_/i.test(node.name);
+        const fortnitePart = node.isMesh && /^fortnite_wheel_\d+$/.test(node.name);
+        if (!node.visible || (!scaniaPart && !chassisPart && !objPart && !gamePart && !fortnitePart)) return;
+        const bounds = new THREE.Box3().setFromObject(node);
+        if (bounds.isEmpty()) return;
+        parts.push({
+            node, center: bounds.getCenter(new THREE.Vector3()),
+            radius: bounds.getSize(new THREE.Vector3()).y / 2,
+            tire: /^PNEU/i.test(node.name) || /^Tyre_tread$/i.test(materialName) ||
+                (objPart && materialName === 'lambert3SG') || gamePart || fortnitePart,
+            objPart, objBolt, gamePart, scaniaPart
+        });
+    });
+    const tires = parts.filter(part => part.tire);
+    parts.forEach(part => {
+        const matchingTires = tires.filter(candidate => {
+            if ((part.objPart && candidate.objPart) || (part.scaniaPart && candidate.scaniaPart)) {
+                const tolerance = part.objBolt ? 0.25 : 0.1;
+                return Math.sign(candidate.center.x) === Math.sign(part.center.x) &&
+                    Math.abs(candidate.center.y - part.center.y) < tolerance &&
+                    Math.abs(candidate.center.z - part.center.z) < tolerance;
+            }
+            return candidate.center.distanceTo(part.center) < 0.1;
+        });
+        const tire = part.gamePart
+            ? matchingTires.sort((a, b) => b.radius - a.radius)[0]
+            : matchingTires[0];
+        if (!tire || !part.node.parent) return;
+        const parent = part.node.parent;
+        const center = parent.worldToLocal(tire.center.clone());
+        const axisPoint = parent.worldToLocal(tire.center.clone().add(new THREE.Vector3(1, 0, 0)));
+        const pivot = new THREE.Group();
+        pivot.position.copy(center);
+        parent.add(pivot);
+        parent.remove(part.node);
+        part.node.position.sub(center);
+        pivot.add(part.node);
+        wheels.push({ group: pivot, radius: tire.radius, axis: axisPoint.sub(center).normalize() });
+    });
+}
+
+function animateTransport(animation, now) {
+    if (!animation.active) return;
+    animation.frame = requestAnimationFrame(time => animateTransport(animation, time));
+    const distance = (now - animation.startedAt) / 1000 * 8;
+    animation.markers.forEach(marker => {
+        marker.position.z = ((marker.userData.startZ - distance + 180) % 360 + 360) % 360 - 180;
+    });
+    animation.wheels.forEach(wheel => {
+        if (wheel.axis) wheel.group.quaternion.setFromAxisAngle(wheel.axis, -distance / wheel.radius);
+        else wheel.group.rotation.x = -distance / wheel.radius;
+    });
+    animation.controls.update();
+    animation.renderer.render(animation.scene, animation.camera);
+}
+
+function addTransportLandscape(animation) {
+    const scene = animation.scene;
+    scene.background = new THREE.Color(0x9bcdf0);
+    scene.fog = new THREE.Fog(0xc8e1e9, 180, 400);
+
+    const sky = new THREE.Mesh(
+        new THREE.SphereGeometry(450, 32, 16),
+        new THREE.ShaderMaterial({
+            side: THREE.BackSide,
+            depthWrite: false,
+            vertexShader: 'varying vec3 vDirection; void main() { vDirection = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+            fragmentShader: 'varying vec3 vDirection; void main() { float h = smoothstep(-0.08, 0.65, vDirection.y); gl_FragColor = vec4(mix(vec3(0.78, 0.88, 0.93), vec3(0.20, 0.55, 0.84), h), 1.0); }'
+        })
+    );
+    scene.add(sky);
+
+    const cloudCanvas = document.createElement('canvas');
+    cloudCanvas.width = 256;
+    cloudCanvas.height = 128;
+    const cloudContext = cloudCanvas.getContext('2d');
+    [[62, 70, 43], [100, 54, 53], [145, 62, 45], [185, 74, 36]].forEach(([x, y, radius]) => {
+        const gradient = cloudContext.createRadialGradient(x, y, 0, x, y, radius);
+        gradient.addColorStop(0, 'rgba(255,255,255,0.65)');
+        gradient.addColorStop(1, 'rgba(255,255,255,0)');
+        cloudContext.fillStyle = gradient;
+        cloudContext.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+    });
+    const cloudTexture = new THREE.CanvasTexture(cloudCanvas);
+    animation.textures.push(cloudTexture);
+    const cloudMaterial = new THREE.SpriteMaterial({ map: cloudTexture, transparent: true, depthWrite: false, opacity: 0.8 });
+    for (let i = 0; i < 12; i++) {
+        const angle = i * Math.PI * 2 / 12;
+        const cloud = new THREE.Sprite(cloudMaterial);
+        cloud.position.set(Math.cos(angle) * 200, 55 + (i % 3) * 13, Math.sin(angle) * 200);
+        cloud.scale.set(85 + (i % 3) * 10, 34, 1);
+        scene.add(cloud);
+    }
+
+    const grassCanvas = document.createElement('canvas');
+    grassCanvas.width = grassCanvas.height = 256;
+    const grassContext = grassCanvas.getContext('2d');
+    const pixels = grassContext.createImageData(256, 256);
+    let seed = 1937;
+    for (let y = 0; y < 256; y++) {
+        for (let x = 0; x < 256; x++) {
+            seed = (seed * 1664525 + 1013904223) >>> 0;
+            const noise = (seed >>> 24) / 255;
+            const patch = Math.sin(x * 0.12) * Math.cos(y * 0.09) * 10;
+            const i = (y * 256 + x) * 4;
+            pixels.data[i] = 165 + noise * 55 + patch;
+            pixels.data[i + 1] = 165 + noise * 55 + patch;
+            pixels.data[i + 2] = 165 + noise * 55 + patch;
+            pixels.data[i + 3] = 255;
+        }
+    }
+    grassContext.putImageData(pixels, 0, 0);
+    const grassTexture = new THREE.CanvasTexture(grassCanvas);
+    grassTexture.wrapS = grassTexture.wrapT = THREE.RepeatWrapping;
+    grassTexture.encoding = THREE.sRGBEncoding;
+    animation.textures.push(grassTexture);
+
+    const ground = new THREE.Mesh(
+        new THREE.PlaneGeometry(500, 500),
+        new THREE.MeshStandardMaterial({ color: 0x637f4e, roughness: 1 })
+    );
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = -0.02;
+    ground.receiveShadow = true;
+    scene.add(ground);
+
+    const terrainMaterial = new THREE.MeshStandardMaterial({ map: grassTexture, vertexColors: true, roughness: 1 });
+    const grassMaterial = new THREE.MeshStandardMaterial({ color: 0x72974a, side: THREE.DoubleSide, roughness: 1 });
+    const grassGeometry = new THREE.BufferGeometry();
+    grassGeometry.setAttribute('position', new THREE.Float32BufferAttribute([
+        -0.12, 0, 0, 0.12, 0, 0, 0, 1, 0,
+        0, 0, -0.12, 0, 0, 0.12, 0, 1, 0
+    ], 3));
+    grassGeometry.computeVertexNormals();
+    const bushGeometry = new THREE.IcosahedronGeometry(1, 1);
+    const bushMaterial = new THREE.MeshStandardMaterial({ color: 0x52723a, roughness: 1 });
+    const heightAt = (offset, z) => {
+        const rise = Math.min(1, Math.max(0, (offset - 9) / 12));
+        const ridge = 23 + 12 * Math.cos(z * Math.PI / 60) +
+            6 * Math.sin(z * Math.PI / 30 + offset * 0.04) +
+            3 * Math.abs(Math.sin(z * Math.PI / 20 + offset * 0.12));
+        const mountain = Math.exp(-Math.pow((offset - 75) / 29, 2));
+        return rise * (0.8 + mountain * Math.max(3, ridge)) + 0.01;
+    };
+
+    [-1, 1].forEach(side => {
+        const positions = [], colors = [], uvs = [], indices = [];
+        const columns = 28, rows = 60;
+        for (let row = 0; row <= rows; row++) {
+            const z = -60 + row * 120 / rows;
+            for (let column = 0; column <= columns; column++) {
+                const offset = 6 + column * 114 / columns;
+                const height = heightAt(offset, z);
+                positions.push(3 + side * offset, height, z);
+                uvs.push(offset * 0.2, (z + 60) * 0.2);
+                const rock = Math.min(0.9, Math.max(0, (height - 4) / 14)) *
+                    (0.45 + 0.55 * Math.abs(Math.sin(offset * 0.3 + Math.cos(z * Math.PI / 30) * 4)));
+                colors.push(0.38 + rock * 0.34, 0.55 + rock * 0.15, 0.24 + rock * 0.45);
+            }
+        }
+        for (let row = 0; row < rows; row++) {
+            for (let column = 0; column < columns; column++) {
+                const a = row * (columns + 1) + column;
+                const b = a + 1, c = a + columns + 1, d = c + 1;
+                if (side > 0) indices.push(a, c, b, b, c, d);
+                else indices.push(a, b, c, b, d, c);
+            }
+        }
+        const terrainGeometry = new THREE.BufferGeometry();
+        terrainGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+        terrainGeometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+        terrainGeometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+        terrainGeometry.setIndex(indices);
+        terrainGeometry.computeVertexNormals();
+
+        for (let segment = -1; segment <= 1; segment++) {
+            const landscape = new THREE.Group();
+            landscape.position.z = segment * 120;
+            landscape.userData.startZ = segment * 120;
+            const terrain = new THREE.Mesh(terrainGeometry, terrainMaterial);
+            terrain.receiveShadow = true;
+            landscape.add(terrain);
+            const grass = new THREE.InstancedMesh(grassGeometry, grassMaterial, 360);
+            grass.frustumCulled = false;
+            const transform = new THREE.Object3D();
+            for (let i = 0; i < grass.count; i++) {
+                const random = n => {
+                    const value = Math.sin((i + 1) * (n * 17.73 + 11.31) + side * 7) * 43758.5453;
+                    return value - Math.floor(value);
+                };
+                const offset = 7 + random(1) * 35;
+                const z = -60 + random(2) * 120;
+                const scale = 0.12 + random(3) * 0.22;
+                transform.position.set(3 + side * offset, heightAt(offset, z) - 0.04, z);
+                transform.rotation.y = random(4) * Math.PI;
+                transform.scale.setScalar(scale);
+                transform.updateMatrix();
+                grass.setMatrixAt(i, transform.matrix);
+            }
+            grass.instanceMatrix.needsUpdate = true;
+            landscape.add(grass);
+            const bushes = new THREE.InstancedMesh(bushGeometry, bushMaterial, 55);
+            bushes.frustumCulled = false;
+            for (let i = 0; i < bushes.count; i++) {
+                const random = n => {
+                    const value = Math.sin((i + 1) * (n * 19.17 + 3.41) + side * 13) * 43758.5453;
+                    return value - Math.floor(value);
+                };
+                const offset = 14 + random(1) * 90;
+                const z = -60 + random(2) * 120;
+                const scale = 0.35 + random(3) * 0.8;
+                transform.position.set(3 + side * offset, heightAt(offset, z) + scale * 0.35, z);
+                transform.rotation.y = random(4) * Math.PI;
+                transform.scale.set(scale, scale * 0.6, scale);
+                transform.updateMatrix();
+                bushes.setMatrixAt(i, transform.matrix);
+            }
+            bushes.instanceMatrix.needsUpdate = true;
+            landscape.add(bushes);
+            scene.add(landscape);
+            animation.markers.push(landscape);
+        }
+    });
+}
+
+async function openTransportAnimation() {
+    transportDialog.showModal();
+    transportStatus.textContent = 'Carregando o veículo e as cargas…';
+    let animation;
+    try {
+        const transportScene = new THREE.Scene();
+        const transportRenderer = new THREE.WebGLRenderer({ antialias: true });
+        transportRenderer.shadowMap.enabled = true;
+        transportRenderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        transportContainer.prepend(transportRenderer.domElement);
+        const transportCamera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
+        const transportControls = new THREE.OrbitControls(transportCamera, transportRenderer.domElement);
+        transportControls.enableDamping = true;
+        transportControls.dampingFactor = 0.05;
+        transportControls.maxPolarAngle = Math.PI / 2 + 0.1;
+        transportControls.autoRotate = true;
+        transportControls.autoRotateSpeed = 0.5;
+        animation = {
+            scene: transportScene, renderer: transportRenderer, camera: transportCamera,
+            controls: transportControls, active: true, frame: 0, textures: [], wheels: [], markers: []
+        };
+        transportAnimation = animation;
+        animation.resize = () => resizeTransportAnimation(animation);
+        window.addEventListener('resize', animation.resize);
+        resizeTransportAnimation(animation);
+        addVehicleSceneLights(transportScene);
+        addTransportLandscape(animation);
+        const road = new THREE.Mesh(
+            new THREE.PlaneGeometry(12, 400),
+            new THREE.MeshStandardMaterial({ color: 0x343b40, roughness: 1 })
+        );
+        road.rotation.x = -Math.PI / 2;
+        road.position.set(3, 0.01, 0);
+        road.receiveShadow = true;
+        transportScene.add(road);
+        const roadPaint = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 1 });
+        [-2.85, 8.85].forEach(x => {
+            const edge = new THREE.Mesh(new THREE.PlaneGeometry(0.12, 400), roadPaint);
+            edge.rotation.x = -Math.PI / 2;
+            edge.position.set(x, 0.02, 0);
+            transportScene.add(edge);
+        });
+        const stripeGeometry = new THREE.PlaneGeometry(0.15, 5);
+        const postGeometry = new THREE.BoxGeometry(0.12, 0.8, 0.12);
+        const postMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff });
+        for (let z = -180; z < 180; z += 12) {
+            const stripe = new THREE.Mesh(stripeGeometry, roadPaint);
+            stripe.rotation.x = -Math.PI / 2;
+            stripe.position.set(3, 0.02, z);
+            stripe.userData.startZ = z;
+            transportScene.add(stripe);
+            animation.markers.push(stripe);
+            [-3.4, 9.4].forEach(x => {
+                const post = new THREE.Mesh(postGeometry, postMaterial);
+                post.position.set(x, 0.4, z);
+                post.userData.startZ = z;
+                transportScene.add(post);
+                animation.markers.push(post);
+            });
+        }
+
+        const model = new THREE.Group();
+        const vehicle = new THREE.Group();
+        const cargo = new THREE.Group();
+        model.add(vehicle, cargo);
+        transportScene.add(model);
+        const context = {
+            group: vehicle, loadGroup: cargo, includeLoads: true,
+            wheels: animation.wheels, textures: animation.textures, isActive: () => animation.active
+        };
+        const tr = currentTrailer;
+        const cabModelId = inputs.cavalinho.value;
+        await draw3D(tr, inputs.posicao.value, isMesaOnlyVehicle(tr), context);
+        if (!animation.active) return;
+        model.scale.setScalar(1 / 3);
+        model.updateMatrixWorld(true);
+        const bounds = new THREE.Box3().setFromObject(model);
+        if (bounds.isEmpty()) throw new Error('O veículo não possui geometria 3D.');
+        const center = bounds.getCenter(new THREE.Vector3());
+        model.position.set(-center.x, -bounds.min.y, -center.z);
+        model.updateMatrixWorld(true);
+        addTransportModelWheels(vehicle, animation.wheels, context.cab, cabModelId);
+        frameFleetYard(animation, new THREE.Box3().setFromObject(model));
+        transportStatus.textContent = '';
+        animation.startedAt = performance.now();
+        animation.frame = requestAnimationFrame(time => animateTransport(animation, time));
+    } catch (error) {
+        console.error('Erro ao iniciar a animação do transporte:', error);
+        if (!animation || animation.active) {
+            transportStatus.textContent = 'Não foi possível carregar o veículo ou as cargas. Feche e tente novamente.';
+        }
+    }
+}
+
+function closeTransportAnimation() {
+    if (transportAnimation) disposeFleetYard(transportAnimation);
+    transportAnimation = null;
+    if (transportDialog.open) transportDialog.close();
+    document.getElementById('open_transport_animation').focus();
+}
+
+document.getElementById('open_transport_animation').addEventListener('click', openTransportAnimation);
+document.getElementById('close_transport_animation').addEventListener('click', closeTransportAnimation);
+transportDialog.addEventListener('cancel', event => {
+    event.preventDefault();
+    closeTransportAnimation();
+});
+transportDialog.addEventListener('close', () => {
+    if (!transportDialog.open && transportAnimation) closeTransportAnimation();
+});
+
 function renderTubeResults(tube) {
     const format = (value, digits = 0) => Number(value).toLocaleString('pt-BR', {
         minimumFractionDigits: digits,
@@ -2467,7 +2902,7 @@ function analyzeAndDraw() {
 // --- Desenho 3D ---
 function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trailerGroup, targetLoadGroup = loadGroup) {
     const trailerGroup = comparison ? comparison.group : targetTrailerGroup;
-    const loadGroup = targetLoadGroup;
+    const loadGroup = comparison?.loadGroup || targetLoadGroup;
     const drawRevision = comparison ? draw3DRevision : ++draw3DRevision;
     const isCurrent = () => comparison ? comparison.isActive() : drawRevision === draw3DRevision;
     const modelPromises = [];
@@ -2497,7 +2932,7 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
         }
     };
     clearGroup(trailerGroup);
-    if (!comparison) clearGroup(loadGroup);
+    if (!comparison || comparison.includeLoads) clearGroup(loadGroup);
 
     const S = 3;
     const mat = (color, roughness=0.9, metalness=0.0) => new THREE.MeshStandardMaterial({color: color, roughness: roughness, metalness: metalness});
@@ -2926,7 +3361,7 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
             object.position.set(0, 0, shiftZ);
             trailerGroup.add(object);
             if (!comparison) {
-                setVehicleModelStatus('');
+                if (!comparison) setVehicleModelStatus('');
                 frameVehicleView();
             }
         }).catch(error => {
@@ -3237,6 +3672,7 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
             );
             kingpin.name = 'trailer_kingpin';
             trailerGroup.add(object);
+            if (comparison?.includeLoads) comparison.cab = object;
             if (!comparison) frameVehicleView();
         }
     }).catch(error => {
@@ -3456,7 +3892,7 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
         drawRearRamps(wT,tr.tipo==='reta'?pH:hT+0.2*S,rearEnd+shiftZ);
     }
 
-    if (comparison) return Promise.all(modelPromises);
+    if (comparison && !comparison.includeLoads) return Promise.all(modelPromises);
 
     // --- RENDERIZAÇÃO DAS CARGAS COMPOSTAS ---
     let loadFrontZ = shiftZ;
@@ -4148,23 +4584,25 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
         }
         if (generalInstances.length) {
             pendingCargoModels++;
-            updateCargoModelStatus();
-            loadGeneralCargo(carga.type).then(({ oriented, size }) => {
-                if (drawRevision !== draw3DRevision) return;
+            if (!comparison) updateCargoModelStatus();
+            const promise = loadGeneralCargo(carga.type).then(({ oriented, size }) => {
+                if (!isCurrent()) return;
                 generalInstances.forEach(instance => {
                     const model = oriented.clone(true);
                     model.scale.set(cW / size.x, cH / size.y, cL / size.z);
                     instance.add(model);
                 });
                 pendingCargoModels--;
-                updateCargoModelStatus();
+                if (!comparison) updateCargoModelStatus();
             }).catch(error => {
                 console.error(`Falha ao carregar a carga 3D ${getCargoLabel(carga.type)}.`, error);
-                if (drawRevision !== draw3DRevision) return;
+                if (!isCurrent()) return;
+                if (comparison) throw error;
                 pendingCargoModels--;
                 cargoModelErrors.add(getCargoLabel(carga.type));
                 updateCargoModelStatus();
             });
+            modelPromises.push(promise);
         }
     });
 
@@ -4450,6 +4888,8 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
         }
     }
     
+    if (comparison) return Promise.all(modelPromises);
+
     // Ajusta a Câmera
     const cameraTransitionLength = tr.tipo === 'reta' ? 0 : (tr.transicao ?? 1.0);
     const totalLen = Math.max(10, 4.5*S+(isCarreta?mL:pL+cameraTransitionLength*S+mL+bridgeL)+4.5*S);
