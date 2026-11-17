@@ -4003,6 +4003,7 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
         }).catch(error => {
             console.error('Erro ao carregar o chassi da carreta:', error);
             if (comparison && isCurrent()) throw error;
+            if (!comparison && isCurrent()) setVehicleModelStatus('Não foi possível carregar o chassi 3D da carreta. Verifique a conexão e tente novamente.', true);
         });
 
         modelPromises.push(loadChassis());
@@ -4234,6 +4235,7 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
     }).catch(error => {
         console.error(`Erro ao carregar o cavalinho ${cabModelId}:`, error);
         if (comparison && isCurrent()) throw error;
+        if (!comparison && isCurrent()) setVehicleModelStatus('Não foi possível carregar o cavalinho 3D. Verifique a conexão e tente novamente.', true);
     });
         modelPromises.push(promise);
     }

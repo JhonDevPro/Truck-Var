@@ -4,7 +4,7 @@
 
 O workflow **Publish PWA and build Android APK** publica a versão web no GitHub Pages e cria um APK de depuração em cada push para `main` ou execução manual. O APK abre a versão publicada do site; mudanças na interface e nas cargas chegam ao aplicativo após a publicação web, sem reinstalar o APK. O ícone do PWA, do iOS e do APK usa o logo em `assets/truck-var-logo.png`.
 
-1. No GitHub, habilite **Settings → Pages → Build and deployment → Source: GitHub Actions**.
+1. No GitHub, habilite **Settings → Pages → Build and deployment → Source: GitHub Actions**. Não use “Deploy from a branch”: ele publica o repositório sem os modelos compactados e pode sobrescrever a publicação preparada pelo workflow.
 2. Aguarde o workflow terminar. A URL do PWA aparece no resumo do job `publish-pwa`.
 3. Android: abra essa URL no Chrome e escolha **Instalar app** ou **Adicionar à tela inicial**. Para instalar o APK, baixe `cargas-felka-android-apk` em **Actions → execução do workflow → Artifacts** e autorize a instalação dessa origem no Android.
 4. iPhone/iPad: abra a URL no Safari, toque em **Compartilhar → Adicionar à Tela de Início**.
@@ -61,4 +61,4 @@ No Truck e no Toco, **Com tampas laterais** limita a carga a 2,44 m e **Sem tamp
 
 O sobrepeso é indicado como atenção operacional e, sozinho, não marca a operação como AET obrigatória.
 
-Os modelos 3D ficam em `caminhões/`. Ao carregar, cada modelo é remodelado para que a carroceria tenha exatamente as medidas acima (veja `RIGID_VEHICLE_MODELS` em `app.js`), recebe a cor padrão branca com detalhes em cinza escuro e uma luz interna na cabine. O Truck e o Toco usam a logo Iveco em `assets/iveco-logo.png`, inclusive no Pátio da Frota 3D. Para trocar um modelo ou ajustar as medidas, edite as entradas `caminhao_*` de `bdVeiculos` e a configuração do modelo correspondente. O comando `npm run build:web` publica cada modelo compactado em `modelos/*.glb.gz`; o site baixa somente as versões compactadas e só carrega o modelo do veículo escolhido.
+Os modelos 3D ficam em `caminhões/`. Ao carregar, cada modelo é remodelado para que a carroceria tenha exatamente as medidas acima (veja `RIGID_VEHICLE_MODELS` em `app.js`), recebe a cor padrão branca com detalhes em cinza escuro e uma luz interna na cabine. O Truck e o Toco usam a logo Iveco em `assets/iveco-logo.png`, inclusive no Pátio da Frota 3D. Para trocar um modelo ou ajustar as medidas, edite as entradas `caminhao_*` de `bdVeiculos` e a configuração do modelo correspondente. O comando `npm run build:web` publica os modelos compactados em `modelos/*.glb.gz` e os originais como alternativa para navegadores sem descompressão ou falhas no download compactado. O site carrega apenas o veículo escolhido.
