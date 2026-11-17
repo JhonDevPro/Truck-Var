@@ -397,6 +397,20 @@ const GENERAL_CARGO_TYPES = GENERAL_CARGO_FILES.map(file => ({
 const generalCargoByType = new Map(GENERAL_CARGO_TYPES.map(type => [type.value, type]));
 const generalCargoPromises = new Map();
 
+// Models measured as too dark under the application's existing scene lighting.
+const GENERAL_CARGO_DARK_MODELS = new Set([
+    '02container.glb', '20-BLACK-shipping_container.glb', '40-RED-container.glb',
+    '40-shipping_container.glb', 'CAÇAMBA-CHEIA.glb', 'abandoned_wooden_log_pallet.glb',
+    'cardboard_boxes_with_plastic_inside.glb', 'cargo_shipping_container_40ft.glb',
+    'container-10-PES.glb', 'container-20-VELHO (1).glb', 'container.glb',
+    'container_decheterie.glb', 'damaged_cable_roll_2.glb', 'deteriorated_boxes_on_a_pallet.glb',
+    'fuel_container.glb', 'gas_tank.glb', 'green_shipping_container.glb', 'logs_on_pallet.glb',
+    'mesh_container.glb', 'palet_wooden_-_11mb.glb', 'palete_game_ready.glb',
+    'pile_bricks_in_pallet.glb', 'sea_container_-_low_poly.glb',
+    'simple_industrial_storage_tank.glb', 'tarp-covered_palettes.glb',
+    'wood__boxes_strapped_on_palet.glb'
+]);
+
 // Correct horizontal rotations baked into these particular source models.
 const GENERAL_CARGO_ROTATIONS = new Map([
     ['02container.glb', -39.25385],
@@ -457,12 +471,26 @@ function loadGeneralCargo(type) {
                     }
                     const center = bounds.getCenter(new THREE.Vector3());
                     aligned.position.sub(center);
+                    const darkMaterials = new Set();
                     oriented.traverse(child => {
                         if (child.isMesh) {
                             child.userData.sharedResource = true;
                             child.castShadow = true;
                             child.receiveShadow = true;
+                            if (GENERAL_CARGO_DARK_MODELS.has(model.file)) {
+                                const materials = Array.isArray(child.material) ? child.material : [child.material];
+                                materials.forEach(material => darkMaterials.add(material));
+                            }
                         }
+                    });
+                    darkMaterials.forEach(material => {
+                        // The renderer outputs linear color and has no environment map for metallic materials.
+                        if (material.map) {
+                            material.map.encoding = THREE.LinearEncoding;
+                            material.map.needsUpdate = true;
+                        }
+                        if (material.metalness > 0.35) material.metalness = 0.35;
+                        material.needsUpdate = true;
                     });
                     resolve({ oriented, size });
                 } catch (error) {
