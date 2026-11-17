@@ -28,7 +28,7 @@ A tabela aplica Row Level Security (RLS): cada conta só pode consultar, alterar
 
 ## Interface e tema
 
-Use **Escuro/Claro** na barra superior para alternar o tema; a preferência fica salva neste navegador. Em telas largas, o cockpit mantém a visualização 3D visível e oferece rolagem independente nas colunas de configuração e análise. Em telas menores, o conteúdo é organizado em uma coluna com rolagem.
+Use **Escuro/Claro** na barra superior para alternar o tema; a preferência fica salva neste navegador. Em telas a partir de 600 pixels de largura, incluindo tablets, o cockpit mantém a visualização 3D visível e oferece rolagem independente nas colunas de configuração e análise. Em telas menores, o conteúdo é organizado em uma coluna com rolagem.
 
 ## Planejamento de cargas e tubos
 

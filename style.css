@@ -145,7 +145,7 @@ body { font-family: 'Inter', sans-serif; background-color: #f8fafc; overflow-x: 
 .h-3d-view { height: 50vh; min-height: 400px; }
 .h-2d-view { height: 28vh; min-height: 200px; }
 
-@media (max-width: 640px) {
+@media (max-width: 599px) {
     body.min-h-screen {
         padding-left: max(0.5rem, env(safe-area-inset-left));
         padding-right: max(0.5rem, env(safe-area-inset-right));
@@ -229,7 +229,7 @@ body {
 .panel-title { color: var(--text); }
 .cockpit-analysis .panel-header svg { color: var(--accent); }
 .cockpit-scroll { min-height: 0; }
-.cockpit-config, .cockpit-analysis { height: auto; min-height: 0; }
+.cockpit-config.cockpit-config, .cockpit-analysis.cockpit-analysis { height: auto; min-height: 0; }
 .analysis-content { background: var(--surface-raised); }
 .theme-toggle {
     display: inline-flex;
@@ -394,25 +394,54 @@ body {
 [data-theme="dark"] #fleet_yard_status,
 [data-theme="dark"] #transport_animation_status { background: #1e293b; color: #fecdd3; }
 
-@media (min-width: 1280px) {
+@media (min-width: 600px) {
     .cockpit-shell { grid-template-rows: auto minmax(0, 1fr); overflow: visible; scrollbar-gutter: auto; }
-    .cockpit-config, .cockpit-analysis { height: 100%; overflow: hidden; }
+    .cockpit-config.cockpit-config, .cockpit-analysis.cockpit-analysis { height: 100%; overflow: hidden; }
     .cockpit-config > .cockpit-scroll, .cockpit-analysis > .cockpit-scroll { flex: 1; overflow-y: auto; }
     .cockpit-visual { height: 100%; min-height: 0; align-self: stretch; gap: 1rem; }
     .viewport-card > div:nth-child(2) { min-height: 0; }
     #three-container { height: 100%; min-height: 0; flex: 1; }
-    .viewport-diagrams { height: 28%; min-height: 130px; max-height: 240px; flex: none; gap: 1rem; }
+    .viewport-diagrams.viewport-diagrams { grid-template-columns: repeat(2, minmax(0, 1fr)); height: 28%; min-height: 130px; max-height: 240px; flex: none; gap: 1rem; }
     .viewport-diagrams .h-2d-view { height: auto; min-height: 0; flex: 1; }
 }
-@media (max-width: 1279px) {
-    .cockpit-shell { align-content: start; }
-    .cockpit-scroll { overflow: visible; }
+@media (min-width: 600px) and (max-width: 1279px) {
+    body.min-h-screen { padding: 0.5rem; }
+    .cockpit-shell.cockpit-shell { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 1fr); gap: 0.5rem; }
+    .cockpit-topbar { grid-column: 1 / -1; }
+    .cockpit-config > .cockpit-scroll, .cockpit-analysis > .cockpit-scroll { padding: 0.75rem; }
+    .cockpit-config .panel-header, .cockpit-analysis .panel-header { padding: 0.75rem; }
+    .cockpit-footer { padding: 0.65rem 0.75rem; }
+    .cockpit-visual.cockpit-visual, .viewport-diagrams.viewport-diagrams { gap: 0.5rem; }
+    .vehicle-tab { padding-inline: 0.1rem; font-size: 0.625rem; }
+    .load-tab { padding-inline: 0.2rem; }
+    .vehicle-metrics label { overflow-wrap: anywhere; }
+    #panel_cargas .grid.grid-cols-2,
+    #panel_gerais .grid.grid-cols-2,
+    #panel_tubos section > .grid.grid-cols-2 { grid-template-columns: minmax(0, 1fr); }
+    #panel_cargas .grid > .col-span-2,
+    #panel_gerais .grid > .col-span-2,
+    #panel_tubos section > .grid > .col-span-2 { grid-column: auto; }
+}
+@media (min-width: 960px) and (max-width: 1279px) {
+    .cockpit-shell.cockpit-shell { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(0, 1fr); }
+}
+@media (min-width: 600px) and (max-width: 767px) {
+    .vehicle-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 600px) and (max-width: 639px) {
+    .cockpit-topbar > div { flex-direction: row; align-items: center; }
+    #auth_form { min-width: 0; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto; }
+    #auth_form button { padding-inline: 0.5rem; }
+}
+@media (max-width: 599px) {
+    .cockpit-shell { align-content: start; grid-auto-rows: max-content; }
+    .cockpit-config > .cockpit-scroll, .cockpit-analysis > .cockpit-scroll { overflow: visible; }
     .cockpit-footer { position: sticky; bottom: 0; z-index: 5; }
 }
 @media print {
     body { height: auto; overflow: visible; background: white; }
     .cockpit-shell { display: block; height: auto; overflow: visible; }
-    .cockpit-config, .cockpit-analysis, .cockpit-visual,
+    .cockpit-config.cockpit-config, .cockpit-analysis.cockpit-analysis, .cockpit-visual,
     .cockpit-config > .cockpit-scroll, .cockpit-analysis > .cockpit-scroll { height: auto; overflow: visible; }
     .cockpit-topbar, .cockpit-footer, .viewport-header button { display: none; }
     #three-container { height: 400px; }
