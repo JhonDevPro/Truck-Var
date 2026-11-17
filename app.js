@@ -514,7 +514,7 @@ const CONTAINER_LOAD_TYPES = new Set(LOAD_TYPES
     .filter(({ value }) => value.startsWith('container_'))
     .map(({ value }) => value));
 const OPEN_TOP_LOAD_TYPES = new Set([
-    'container_mae', 'container_20', 'container_40',
+    'container_20', 'container_40',
     'container_10', 'container_baby'
 ]);
 const FLAT_RACK_LOAD_TYPES = new Set(LOAD_TYPES
@@ -533,6 +533,7 @@ const TANK_CONTAINER_LOAD_TYPES = new Set(LOAD_TYPES
     .filter(({ value }) => value.startsWith('container_tank_'))
     .map(({ value }) => value));
 const UNBRANDED_CONTAINER_TYPES = new Set([
+    'container_mae',
     ...FLAT_RACK_LOAD_TYPES,
     ...FLAT_PLATFORM_LOAD_TYPES,
     ...TANK_CONTAINER_LOAD_TYPES
@@ -560,6 +561,13 @@ function getLoadStartClearance(type, tr) {
     if (tr?.modelo === 'truck' && isContainerLoad(type)) return 1;
     if (tr?.tipo === 'caminhao') return 0.1;
     return isLockedLoad(type, tr) ? 1.4 : 0.2;
+}
+
+function getPranchaLoadStart(offset, clearance, areaLength, loadLength) {
+    if (offset === 0 && loadLength <= areaLength && clearance + loadLength > areaLength) {
+        return areaLength - loadLength;
+    }
+    return Math.max(offset, clearance);
 }
 
 function getDeckTransitionLength(tr) {
@@ -1800,8 +1808,8 @@ function positionLoadAllocations(tr, isCarreta, allocations) {
         }
         load.stackBaseHeight = 0;
         if (splitCoils) {
-            const mesaStartOffset = Math.max(mesaOffset, clearance);
-            const pescocoStartOffset = Math.max(pescocoOffset, clearance);
+            const mesaStartOffset = getPranchaLoadStart(mesaOffset, clearance, tr.mesa, grid.totalComp);
+            const pescocoStartOffset = getPranchaLoadStart(pescocoOffset, clearance, tr.pescoco, grid.totalComp);
             mesaOffset = mesaStartOffset + grid.totalComp + gap;
             pescocoOffset = pescocoStartOffset + grid.totalComp + gap;
             mesaEnd = Math.max(mesaEnd, mesaStartOffset + grid.totalComp);
@@ -1817,7 +1825,12 @@ function positionLoadAllocations(tr, isCarreta, allocations) {
 
         const inPescoco = !isCarreta && pos === 'pescoco';
         load.inPescoco = inPescoco;
-        const startOffset = Math.max(inPescoco ? pescocoOffset : mesaOffset, clearance);
+        const startOffset = getPranchaLoadStart(
+            inPescoco ? pescocoOffset : mesaOffset,
+            clearance,
+            inPescoco ? tr.pescoco : tr.mesa,
+            grid.totalComp
+        );
         if (inPescoco) {
             pescocoOffset = startOffset + grid.totalComp + gap;
             pescocoEnd = Math.max(pescocoEnd, startOffset + grid.totalComp);
@@ -3056,6 +3069,20 @@ function analyzeAndDraw() {
         }
     }
 
+    const reducedClearance = !isCarreta && loadSequence.loads.some(load =>
+        load.splitCoils
+            ? load.mesaStartOffset < load.clearance - 1e-9 || load.pescocoStartOffset < load.clearance - 1e-9
+            : load.startOffset < load.clearance - 1e-9
+    );
+    if (reducedClearance) {
+        aetMotivo += aetMotivo ? " " : "";
+        aetMotivo += "A folga inicial da carga foi reduzida para caber na prancha; confira os apoios, obstáculos e pontos de fixação no veículo real.";
+        if (!reqAET) {
+            alertClass = "bg-amber-50 border-amber-200 text-amber-800";
+            iconColor = "text-amber-600";
+        }
+    }
+
     const areaExcedida = [];
     if (!isCarreta && loadSequence.pescocoComp > tr.pescoco) {
         areaExcedida.push(`pescoço (${loadSequence.pescocoComp.toFixed(2)}m usados de ${tr.pescoco.toFixed(2)}m)`);
@@ -3179,7 +3206,10 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
                 if (child.userData?.sharedResource) return;
                 if (child.geometry) child.geometry.dispose();
                 if (child.material) {
-                    (Array.isArray(child.material) ? child.material : [child.material]).forEach(m => m.dispose());
+                    (Array.isArray(child.material) ? child.material : [child.material]).forEach(m => {
+                        if (m.userData.ownedTexture) m.userData.ownedTexture.dispose();
+                        m.dispose();
+                    });
                 }
             });
         }
@@ -4320,6 +4350,74 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
                 drawCoil(axis,radius,currentCoilLength,0,coilCenterY,centerZ);
             }
             cargoBox(cW*0.84,supportThickness,(splitCoils?sectionLength:cL)*0.92,navy,0,-cH/2+supportThickness/2,0);
+        } else if (carga.type === 'container_mae') {
+            const red = mat(0x9f0814,0.5,0.35);
+            const frameRed = mat(0x790711,0.45,0.45);
+            const white = mat(0xf3f4ed,0.55,0.2);
+            const yellow = mat(0xd5e900,0.5,0.2);
+            const dark = mat(0x3e1114,0.55,0.4);
+            const rail = Math.min(cW,cH,cL)*0.035;
+            cargoBox(cW*0.96,cH*0.96,cL*0.96,red);
+            [-1,1].forEach(side => {
+                const x = side*cW*0.48;
+                cargoBox(rail,cH*0.96,cL*0.98,frameRed,x,0,0);
+                cargoBox(rail*1.12,cH*0.075,cL*0.98,white,x,0,0);
+                for (let i=0;i<=4;i++) {
+                    const z = -cL*0.46+i*cL*0.23;
+                    cargoBox(rail*1.15,cH*0.92,rail,frameRed,x,0,z);
+                    cargoBox(rail*1.3,cH*0.075,rail*1.15,white,x,0,z);
+                }
+                [-1,1].forEach(end => {
+                    const z = end*cL*0.47;
+                    cargoBox(cW*0.065,cH*0.17,cL*0.065,yellow,side*cW*0.47,cH*0.415,z);
+                    cargoBox(cW*0.065,cH*0.17,cL*0.065,yellow,side*cW*0.47,-cH*0.415,z);
+                });
+            });
+            [-1,1].forEach(end => {
+                const z = end*cL*0.485;
+                cargoBox(cW*0.94,rail,cL*0.035,frameRed,0,cH*0.46,z);
+                cargoBox(cW*0.94,rail,cL*0.035,frameRed,0,-cH*0.46,z);
+                if (end < 0) {
+                    cargoBox(cW*0.94,cH*0.075,cL*0.025,white,0,0,z);
+                    [-1,1].forEach(side => {
+                        cargoBeam([side*cW*0.42,cH*0.42,z],[side*cW*0.16,cH*0.05,z],rail,frameRed);
+                        cargoBox(rail,cH*0.9,rail,frameRed,side*cW*0.16,0,z);
+                    });
+                } else {
+                    cargoBox(rail,cH*0.91,rail,frameRed,0,0,z);
+                    [-1,1].forEach(side => {
+                        cargoBox(rail*0.65,cH*0.86,rail,frameRed,side*cW*0.17,0,z);
+                        [-0.29,0.29].forEach(y => {
+                            cargoBox(cW*0.13,rail*0.6,rail*1.3,frameRed,side*cW*0.17,y*cH,z);
+                            cargoBox(rail*0.8,rail*0.85,rail*1.4,dark,side*cW*0.17,y*cH,z);
+                        });
+                        [-0.32,0,0.32].forEach(y => {
+                            cargoBox(cW*0.12,rail*0.75,rail,frameRed,side*cW*0.39,y*cH,z);
+                        });
+                    });
+                }
+            });
+            const labelCanvas = document.createElement('canvas');
+            labelCanvas.width = 512; labelCanvas.height = 256;
+            const labelContext = labelCanvas.getContext('2d');
+            labelContext.fillStyle = '#ffffff';
+            labelContext.font = 'bold 42px sans-serif';
+            labelContext.fillText('CORAÇÃO DE MÃE', 16, 62);
+            labelContext.font = 'bold 34px monospace';
+            labelContext.fillText('CM-0001', 16, 128);
+            labelContext.fillText('TYPE A', 16, 172);
+            const labelTexture = new THREE.CanvasTexture(labelCanvas);
+            const labelMaterial = new THREE.MeshBasicMaterial({ map: labelTexture, transparent: true, depthWrite: false });
+            labelMaterial.userData.ownedTexture = labelTexture;
+            [-1,1].forEach(side => {
+                const label = new THREE.Mesh(new THREE.PlaneGeometry(cL*0.3,cH*0.16),labelMaterial);
+                label.position.set(side*cW*0.499,cH*0.25,0);
+                label.rotation.y = side*Math.PI/2;
+                baseItem.add(label);
+            });
+            const doorLabel = new THREE.Mesh(new THREE.PlaneGeometry(cW*0.3,cH*0.16),labelMaterial);
+            doorLabel.position.set(cW*0.22,-cH*0.16,cL*0.505);
+            baseItem.add(doorLabel);
         } else if (CONTAINER_LOAD_TYPES.has(carga.type)){
             let contColor = 0x176b87; 
             let logoColor = "#000000";
@@ -4722,38 +4820,32 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
             }
             cargoBox(cW*1.02,.12*S,cL*.98,navy,0,-cH/2-.08*S,0);
         } else if (carga.type==='coracao_mae_aberto'){
-            const cageFrame = mat(0x6b5843,0.62,0.42);
-            const cageHighlights = mat(0x9ca36a,0.48,0.28);
-            const vesselMaterial = mat(0xc64b2f,0.42,0.5);
+            const cageFrame = mat(0x71322c,0.55,0.45);
+            const cageHighlights = mat(0xd5e900,0.5,0.25);
+            const engineSteel = mat(0xa6afb2,0.42,0.65);
+            const engineDark = mat(0x30393e,0.48,0.58);
+            const engineLight = mat(0xd0d5d3,0.38,0.68);
             buildCage(cageFrame,cageHighlights,true);
 
-            const vesselRadius = Math.min(cW,cL)*0.16;
-            const vesselHeight = cH*0.62;
-            const vesselBaseY = -cH/2 + cH*0.1;
-            const vesselCenterY = vesselBaseY + vesselHeight/2;
-            const vessel = mesh(
-                new THREE.CylinderGeometry(vesselRadius,vesselRadius,vesselHeight,32),
-                vesselMaterial,
-                0,vesselCenterY,0,
-                baseItem
-            );
-            vessel.castShadow = true;
-            vessel.receiveShadow = true;
-
-            [-1,1].forEach(end => {
-                const head = mesh(
-                    new THREE.SphereGeometry(vesselRadius,24,16),
-                    vesselMaterial,
-                    0,
-                    vesselCenterY + end * vesselHeight * 0.43,
-                    0,
-                    baseItem
-                );
-                head.scale.set(1,0.38,1);
-                cargoBox(vesselRadius*0.5,cH*0.08,vesselRadius*0.5,cageFrame,0,
-                    vesselCenterY + end * (vesselHeight*0.5 + cH*0.025),0);
+            cargoBox(cW*0.72,cH*0.08,cL*0.8,engineDark,0,-cH*0.39,0);
+            cargoBox(cW*0.66,cH*0.2,cL*0.76,engineSteel,0,-cH*0.25,0);
+            cargoBox(cW*0.62,cH*0.28,cL*0.73,engineLight,0,-cH*0.01,0);
+            cargoBox(cW*0.54,cH*0.15,cL*0.72,engineSteel,0,cH*0.2,0);
+            const cylinderCount = 6;
+            for (let i=0;i<cylinderCount;i++) {
+                const z = -cL*0.3+i*cL*0.12;
+                [-1,1].forEach(side => {
+                    cylinderAlongX(Math.min(cH*0.065,cL*0.045),cW*0.035,engineDark,side*cW*0.325,-cH*0.12,z,20);
+                    cylinderAlongX(Math.min(cH*0.045,cL*0.035),cW*0.04,engineLight,side*cW*0.29,cH*0.16,z,20);
+                    cargoBox(cW*0.19,cH*0.06,cL*0.085,engineDark,side*cW*0.14,cH*0.29,z);
+                    cargoBox(cW*0.025,cH*0.17,cL*0.025,engineDark,side*cW*0.33,-cH*0.26,z);
+                });
+            }
+            [-1,1].forEach(side => {
+                cylinderAlongZ(cH*0.025,cL*0.72,engineLight,side*cW*0.24,cH*0.34,0,16);
             });
-            cargoBox(cW*0.58,cH*0.045,cL*0.58,cageFrame,0,vesselBaseY,0);
+            cylinderAlongZ(Math.min(cW*0.2,cH*0.19),cL*0.05,engineDark,0,-cH*0.08,cL*0.39,32);
+            cylinderAlongZ(Math.min(cW*0.14,cH*0.13),cL*0.06,engineLight,0,-cH*0.08,cL*0.42,32);
         } else if (carga.type==='tanque'){
             buildCage(cageSteel,cageAccent,true);
             const tankRadius = Math.min(cW,cH)*0.34;
@@ -5318,12 +5410,14 @@ function drawTubeRear2D(ctx, canvas, tr, pos, isCarreta) {
 
 function drawCargoRect(ctx, x, y, w, h, carga) {
     if (CONTAINER_LOAD_TYPES.has(carga.type)) {
-        let color = 'rgba(23,107,135,0.7)'; 
-        if (carga.armador === 'maersk') color = 'rgba(224,229,232,0.9)';
-        if (carga.armador === 'msc') color = 'rgba(214,195,127,0.9)';
-        if (carga.armador === 'hapag') color = 'rgba(234,88,12,0.9)';
-        if (carga.armador === 'evergreen') color = 'rgba(6,95,50,0.8)';
-        if (carga.armador === 'cma') color = 'rgba(15,33,66,0.8)';
+        let color = carga.type === 'container_mae' ? 'rgba(159,8,20,0.8)' : 'rgba(23,107,135,0.7)';
+        if (carga.type !== 'container_mae') {
+            if (carga.armador === 'maersk') color = 'rgba(224,229,232,0.9)';
+            if (carga.armador === 'msc') color = 'rgba(214,195,127,0.9)';
+            if (carga.armador === 'hapag') color = 'rgba(234,88,12,0.9)';
+            if (carga.armador === 'evergreen') color = 'rgba(6,95,50,0.8)';
+            if (carga.armador === 'cma') color = 'rgba(15,33,66,0.8)';
+        }
         ctx.fillStyle = color;
         ctx.strokeStyle = '#1e293b';
     } else {
