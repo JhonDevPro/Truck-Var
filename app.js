@@ -4,7 +4,7 @@ const bdVeiculos = {
     "prancha_reb_7_0": { tipo: "rebaixada", w: 3.00, h: 0.70, pescoco: 3.80, mesa: 7.00, compTotal: 16.70, eixos: 3, cap: 45 },
     "prancha_reb_6_0": { tipo: "rebaixada", w: 3.20, h: 0.90, pescoco: 3.60, transicao: 1.40, mesa: 6.00, areaCargaTotal: 11.00, compTotal: 14.60, eixos: 3, cap: 45 },
     "prancha_reta_12_5": { tipo: "reta", w: 3.20, h: 1.20, pescoco: 3.60, mesa: 12.55, compTotal: 18.00, eixos: 3, cap: 40 },
-    "prancha_semi_3_9": { tipo: "semi-rebaixada", w: 3.00, h: 0.80, pescoco: 3.65, mesa: 3.95, compTotal: 13.50, eixos: 3, cap: 35 },
+    "prancha_semi_3_9": { tipo: "semi-rebaixada", w: 3.00, h: 0.80, pescoco: 3.65, mesa: 4.00, compTotal: 13.50, eixos: 3, cap: 35 },
     "prancha_reb_4_11_3": { tipo: "rebaixada", w: 3.00, h: 0.90, pescoco: 3.70, mesa: 11.30, compTotal: 19.00, eixos: 4, cap: 60 },
     // --- NOVAS PRANCHAS REGISTADAS ---
     "prancha_step_3_eixos": { tipo: "rebaixada", w: 3.20, h: 0.90, pescoco: 3.60, transicao: 1.20, mesa: 7.00, areaCargaTotal: 10.00, compTotal: 15.50, eixos: 3, cap: 45 },
@@ -38,6 +38,10 @@ function isMesaOnlyVehicle(tr) {
 function usesSideGates(tr, isCarreta) {
     if (tr.tipo === 'caminhao') return tr.paredesFixas === true || inputs.tampas.value === 'com';
     return isCarreta && inputs.tampas.value === 'com' && tr.tipo !== 'sider' && tr.tipo !== 'carreta_bau';
+}
+
+function getLoadAreaCenterX(tr) {
+    return Number.isFinite(tr.loadCenterX) ? tr.loadCenterX : 0;
 }
 
 // Posição da quinta-roda em metros após a transformação original de cada modelo.
@@ -1448,6 +1452,7 @@ function getGridMetrics(tr, carga, isCarreta, cComp = carga.comp) {
         totalComp,
         totalLarg,
         availableWidth,
+        centerX: getLoadAreaCenterX(tr),
         gap,
         isDistributed,
         pecasNaBase,
@@ -1589,13 +1594,13 @@ function getTubeMetrics(tr) {
     };
 }
 
-function getTubePositions(tube, limit = Math.min(tube.loaded, 1200)) {
+function getTubePositions(tube, limit = Math.min(tube.loaded, 1200), centerXmm = 0) {
     const positions = [];
     for (let layer = 0; layer < tube.loadedLayerCounts.length && positions.length < limit; layer++) {
         const count = Math.min(tube.loadedLayerCounts[layer], limit - positions.length);
         for (let index = 0; index < count && positions.length < limit; index++) {
             positions.push({
-                xMm: (index - (count - 1) / 2) * tube.diameterMm,
+                xMm: centerXmm + (index - (count - 1) / 2) * tube.diameterMm,
                 layer
             });
         }
@@ -4806,7 +4811,7 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
                 const c=i%grid.maxCols;
                 const rowItems=Math.min(grid.maxCols,grid.pecasNaBase-r*grid.maxCols);
                 const rowW=rowItems*cW+Math.max(0,rowItems-1)*grid.gap*S;
-                const itemX=-rowW/2+cW/2+c*(cW+grid.gap*S);
+                const itemX=grid.centerX*S-rowW/2+cW/2+c*(cW+grid.gap*S);
                 const rowOffset=r*(coilLength+grid.gap)*S;
                 for (let layer = 0; layer < getStackCount(carga, i, grid.camadas); layer++) {
                     const neckItem=baseItem.clone();
@@ -4826,7 +4831,7 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
                 const rowItems = Math.min(grid.maxCols, grid.pecasNaBase - r * grid.maxCols);
                 const rowW = rowItems * cW + Math.max(0, rowItems - 1) * grid.gap * S;
                 
-                const itemX = -rowW / 2 + cW / 2 + c * (cW + grid.gap * S);
+                const itemX = grid.centerX * S - rowW / 2 + cW / 2 + c * (cW + grid.gap * S);
                 const itemZ = loadZ_start - cL / 2 - r * (cL + grid.gap * S);
                 for (let layer = 0; layer < getStackCount(carga, i, grid.camadas); layer++) {
                     const inst = baseItem.clone();
@@ -4862,7 +4867,8 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
 
     if (activeCargaTab === 'tubos') {
         const tube = getTubeMetrics(tr);
-        const tubePositions = getTubePositions(tube, Math.min(tube.loaded, 1200));
+        const loadCenterX = getLoadAreaCenterX(tr);
+        const tubePositions = getTubePositions(tube, Math.min(tube.loaded, 1200), loadCenterX * 1000);
         if (tubePositions.length && tube.tubeLengthM > 0) {
             const diameter = tube.diameterMm / 1000 * S;
             const radius = diameter / 2;
@@ -4927,7 +4933,7 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
                         (layer - 0.5) * tube.layerSleeperMm) / 1000 * S;
                 for (let support = 0; support < supportCount; support++) {
                     const supportZ = centerZ + (support - 1) * length * 0.34;
-                    box(supportWidth, supportHeight, supportDepth, wood, 0, supportY, supportZ, loadGroup);
+                    box(supportWidth, supportHeight, supportDepth, wood, loadCenterX * S, supportY, supportZ, loadGroup);
                 }
             }
 
@@ -4937,7 +4943,7 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
             [-1, 1].forEach(side => {
                 for (let post = 0; post < supportCount; post++) {
                     const postZ = centerZ + (post - 1) * Math.min(length * 0.34, mL * 0.34);
-                    box(0.07 * S, postHeight, 0.09 * S, postMaterial, side * postX,
+                    box(0.07 * S, postHeight, 0.09 * S, postMaterial, loadCenterX * S + side * postX,
                         deckHeight + postHeight / 2, postZ, loadGroup);
                 }
             });
@@ -5258,7 +5264,8 @@ function drawTubeRear2D(ctx, canvas, tr, pos, isCarreta) {
     ctx.fillStyle = '#475569';
     ctx.fillRect(centerX - trailerWidth / 2, deckY, trailerWidth, Math.max(4, 0.16 * scale));
     ctx.fillStyle = '#80552f';
-    ctx.fillRect(centerX - Math.min(trailerWidth, tube.widthOccupiedMm * scale / 1000) / 2,
+    ctx.fillRect(centerX + getLoadAreaCenterX(tr) * scale -
+        Math.min(trailerWidth, tube.widthOccupiedMm * scale / 1000) / 2,
         deckY - boardHeight, Math.min(trailerWidth, tube.widthOccupiedMm * scale / 1000), boardHeight);
 
     const legalHeight = Math.min(tube.heightMm / 1000, 4.4 - deckHeight);
@@ -5272,7 +5279,8 @@ function drawTubeRear2D(ctx, canvas, tr, pos, isCarreta) {
 
     if (tube.loaded > 0 && tube.diameterMm > 0) {
         const pipeRadius = tube.diameterMm / 2000 * scale;
-        const positions = getTubePositions(tube, Math.min(tube.loaded, 500));
+        const loadCenterX = getLoadAreaCenterX(tr);
+        const positions = getTubePositions(tube, Math.min(tube.loaded, 500), loadCenterX * 1000);
         positions.forEach(position => {
             const x = centerX + position.xMm / 1000 * scale;
             const y = deckY - (tube.firstSleeperMm / 1000 + tube.diameterMm / 2000 +
@@ -5294,7 +5302,7 @@ function drawTubeRear2D(ctx, canvas, tr, pos, isCarreta) {
             const y = deckY - (tube.firstSleeperMm / 1000 + layer * tube.diameterMm / 1000 +
                 (layer - 1) * tube.layerSleeperMm / 1000) * scale;
             ctx.fillStyle = '#80552f';
-            ctx.fillRect(centerX - Math.min(trailerWidth, tube.widthOccupiedMm * scale / 1000) / 2,
+            ctx.fillRect(centerX + loadCenterX * scale - Math.min(trailerWidth, tube.widthOccupiedMm * scale / 1000) / 2,
                 y - Math.max(2, tube.layerSleeperMm / 1000 * scale) / 2,
                 Math.min(trailerWidth, tube.widthOccupiedMm * scale / 1000),
                 Math.max(2, tube.layerSleeperMm / 1000 * scale));
@@ -5495,7 +5503,7 @@ function drawRear2D(ctx, canvas, tr, pos, isCarreta) {
         const cW = carga.larg * scale;
         const firstRowItems = Math.min(grid.maxCols, grid.pecasNaBase);
         const rowW_Scale = firstRowItems * cW + Math.max(0, firstRowItems - 1) * grid.gap * scale;
-        const startX_row = centerX - rowW_Scale / 2;
+        const startX_row = centerX + grid.centerX * scale - rowW_Scale / 2;
 
         for (let c = 0; c < firstRowItems; c++) {
             const itemX = startX_row + c * (cW + grid.gap * scale);
