@@ -11,7 +11,7 @@ O workflow **Publish PWA and build Android APK** publica a versão web no GitHub
 
 O APK precisa de conexão à internet para abrir o site e receber as atualizações. Ações que alterem o código nativo ou os metadados do aplicativo ainda exigem gerar e distribuir um APK novo. O pacote Android não inclui os modelos 3D; eles são carregados pelo site publicado.
 
-O PWA mantém os arquivos principais, as bibliotecas do Three.js e os modelos 3D otimizados da Scania e do chassi da carreta em cache após o primeiro carregamento online. Esses dois modelos são carregados em paralelo ao abrir o aplicativo para já estarem prontos ao selecionar uma carreta.
+O PWA mantém os arquivos principais, as bibliotecas do Three.js e os modelos 3D compactados em cache após o primeiro carregamento online. Os modelos selecionados são baixados sob demanda; Scania e chassi da carreta são pré-carregados para agilizar a composição e a animação da frota. A publicação compacta os GLBs de cargas gerais durante o build.
 
 ## Supabase e planejamentos na nuvem
 
@@ -32,7 +32,7 @@ Na área de cargas, as abas **Cargas** e **Tubos** mantêm os planejamentos sepa
 
 A aba **Cargas Gerais** lista os modelos GLB em `cargas/` e permite adicioná-los à mesma composição das cargas existentes. Modelos com “container” no nome recebem as medidas de referência dos containers Dry de 10, 20 ou 40 pés; sem tamanho no nome, usa-se 20 pés. Modelos com “palet” ou “pallet” no nome recebem 1,20 × 1,20 × 1,40 m e 100 kg. Os pesos dos containers devem ser informados. Confira e ajuste esses valores para a carga real antes do transporte. O peso das cargas pode ser informado em kg (padrão) ou toneladas. Os modelos são redimensionados para as medidas informadas, com sua dimensão horizontal mais longa orientada no comprimento do veículo; os arquivos que trazem rotação horizontal recebem correções específicas antes do redimensionamento. São baixados sob demanda e a publicação web inclui a pasta de cargas.
 Nas carretas, os modelos de cargas gerais com “container” ou “cesta” no nome usam a mesma distância mínima de 1,40 m do malhal aplicada às cargas tradicionais desses tipos. A posição é uma referência visual; confira a compatibilidade com os locks do veículo real.
-Para incluir novos arquivos, adicione também os nomes à lista `GENERAL_CARGO_FILES` em `app.js`.
+Para incluir novos arquivos, adicione também os nomes à lista `GENERAL_CARGO_FILES` em `app.js`. O build web gera automaticamente os arquivos `.glb.gz` correspondentes.
 
 ## Caminhões
 
@@ -49,4 +49,4 @@ A aba **Caminhões** do seletor de veículos usa caminhões com carroceria próp
 
 No Truck e no Toco, **Com tampas laterais** limita a carga a 2,44 m e **Sem tampas laterais** libera os 2,50 m; o malhal (frente) e a tampa traseira sempre aparecem, assim como a sinalização vermelha e branca colada na lateral, na linha do assoalho. As paredes dos VUC e do Saveiro fazem parte do modelo 3D e sempre limitam a carga à largura interna.
 
-Os modelos 3D ficam em `caminhões/`. Ao carregar, cada modelo é remodelado para que a carroceria tenha exatamente as medidas acima (veja `RIGID_VEHICLE_MODELS` em `app.js`), recebe a cor padrão branca com detalhes em cinza escuro e uma luz interna na cabine. Para trocar um modelo ou ajustar as medidas, edite as entradas `caminhao_*` de `bdVeiculos` e a configuração do modelo correspondente. O comando `npm run build:web` publica cada modelo compactado em `modelos/*.glb.gz`; o site baixa somente as versões compactadas e só carrega o modelo do veículo escolhido.
+Os modelos 3D ficam em `caminhões/`. Ao carregar, cada modelo é remodelado para que a carroceria tenha exatamente as medidas acima (veja `RIGID_VEHICLE_MODELS` em `app.js`), recebe a cor padrão branca com detalhes em cinza escuro e uma luz interna na cabine. O Truck e o Toco usam a logo Iveco em `assets/iveco-logo.png`, inclusive no Pátio da Frota 3D. Para trocar um modelo ou ajustar as medidas, edite as entradas `caminhao_*` de `bdVeiculos` e a configuração do modelo correspondente. O comando `npm run build:web` publica cada modelo compactado em `modelos/*.glb.gz`; o site baixa somente as versões compactadas e só carrega o modelo do veículo escolhido.

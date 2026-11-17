@@ -1,4 +1,4 @@
-import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
@@ -20,7 +20,7 @@ const modelFiles = [
     'scania_S-730.glb',
     'chassi-para-carreta-14-15.glb'
 ];
-// Caminhões: o site publicado usa somente as versões .gz (carregadas por loadCompressedTrailerModel).
+// Caminhões: o site publicado usa as versões .gz.
 const vehicleModels = [
     ['caminhões/Truck (2).glb', 'modelos/truck.glb.gz'],
     ['caminhões/Toco (2).glb', 'modelos/toco.glb.gz'],
@@ -62,6 +62,15 @@ if (androidShell) {
         const model = await readFile(resolve(root, source));
         await writeFile(resolve(output, target), gzipSync(model, { level: 9 }));
     }
+    const cargoOutput = resolve(output, 'modelos/cargas');
+    await mkdir(cargoOutput, { recursive: true });
+    const cargoFiles = await readdir(resolve(root, 'cargas'), { withFileTypes: true });
+    for (const file of cargoFiles.filter(entry => entry.isFile() && /\.glb$/i.test(entry.name))) {
+        const model = await readFile(resolve(root, 'cargas', file.name));
+        await writeFile(resolve(cargoOutput, `${file.name}.gz`), gzipSync(model, { level: 9 }));
+    }
 }
 
 await cp(resolve(root, 'icons'), resolve(output, 'icons'), { recursive: true });
+await mkdir(resolve(output, 'assets'), { recursive: true });
+await cp(resolve(root, 'assets/iveco-logo.png'), resolve(output, 'assets/iveco-logo.png'));

@@ -94,6 +94,7 @@ const RIGID_VEHICLE_MODELS = {
         bed: { front: 1.57, rear: -6.73, width: 2.60, floor: 1.67, floorWidth: 2.48, centerX: 0 },
         wheels: { z: [3.49, -3.75, -5.15], radius: 0.585, innerX: 0.6 },
         cabLight: { x: 0, y: 3.1, z: 1.9 },
+        ivecoLogo: true,
         paints: [
             { match: /ruby_red/i, color: VEHICLE_BODY_WHITE },
             { match: /Independent_bed_paint/i, color: VEHICLE_DETAIL_GRAY },
@@ -110,6 +111,7 @@ const RIGID_VEHICLE_MODELS = {
         bed: { front: 1.98, rear: -2.86, width: 2.08, floor: 1.47, floorWidth: 1.98, centerX: 0 },
         wheels: { z: [3.07, -1.47], radius: 0.515, innerX: 0.55 },
         cabLight: { x: 0, y: 2.65, z: 1.3 },
+        ivecoLogo: true,
         paints: [
             { match: /ruby_red/i, color: VEHICLE_BODY_WHITE },
             { match: /Independent_bed_paint/i, color: VEHICLE_DETAIL_GRAY },
@@ -421,11 +423,14 @@ function loadGeneralCargo(type) {
     if (!generalCargoPromises.has(type)) {
         const model = generalCargoByType.get(type);
         const promise = new Promise((resolve, reject) => {
-            new THREE.GLTFLoader().load(`./cargas/${encodeURIComponent(model.file)}`, gltf => {
+            loadCompressedGlb(
+                `./modelos/cargas/${encodeURIComponent(model.file)}.gz`,
+                `./cargas/${encodeURIComponent(model.file)}`
+            ).then(source => {
                 try {
                     const oriented = new THREE.Group();
                     const aligned = new THREE.Group();
-                    aligned.add(gltf.scene);
+                    aligned.add(source);
                     oriented.add(aligned);
                     const rotation = GENERAL_CARGO_ROTATIONS.get(model.file);
                     aligned.rotation.y = THREE.MathUtils.degToRad(rotation ?? 0);
@@ -452,7 +457,7 @@ function loadGeneralCargo(type) {
                 } catch (error) {
                     reject(error);
                 }
-            }, undefined, reject);
+            }, reject);
         });
         generalCargoPromises.set(type, promise);
         promise.catch(() => {
@@ -690,7 +695,7 @@ function loadCabModel(modelId) {
                 }, undefined, reject);
             })
             : model.compression === 'gzip'
-                ? loadCompressedTrailerModel(model.url, './scania_S-730.glb')
+                ? loadCompressedGlb(model.url, './scania_S-730.glb')
                 : new Promise((resolve, reject) => {
                 const loader = new THREE.GLTFLoader();
                 loader.load(model.url, gltf => resolve(gltf.scene), undefined, reject);
@@ -703,7 +708,7 @@ function loadCabModel(modelId) {
     return cabModelPromises.get(modelId);
 }
 
-function loadCompressedTrailerModel(compressedUrl, uncompressedUrl) {
+function loadCompressedGlb(compressedUrl, uncompressedUrl) {
     const loader = new THREE.GLTFLoader();
     const loadUncompressed = () => new Promise((resolve, reject) => {
         loader.load(uncompressedUrl, gltf => resolve(gltf.scene), undefined, reject);
@@ -735,7 +740,7 @@ function loadCompressedTrailerModel(compressedUrl, uncompressedUrl) {
 
 function loadTrailerChassis() {
     if (!trailerChassisPromise) {
-        const loadPromise = loadCompressedTrailerModel(
+        const loadPromise = loadCompressedGlb(
             './chassi-para-carreta-14-15.glb.gz',
             './chassi-para-carreta-14-15.glb'
         );
@@ -750,12 +755,27 @@ function loadTrailerChassis() {
 
 const rigidVehiclePromises = new Map();
 const frontFacadeTextures = new WeakMap();
+let ivecoLogoImagePromise;
+
+function loadIvecoLogoImage() {
+    if (!ivecoLogoImagePromise) {
+        ivecoLogoImagePromise = new Promise((resolve, reject) => {
+            const image = new Image();
+            image.onload = () => resolve(image);
+            image.onerror = () => reject(new Error('Não foi possível carregar a logo Iveco.'));
+            image.src = './assets/iveco-logo.png';
+        });
+    }
+    return ivecoLogoImagePromise;
+}
 
 function loadRigidVehicle(tr) {
     if (!rigidVehiclePromises.has(tr.modelo)) {
         const cfg = RIGID_VEHICLE_MODELS[tr.modelo];
-        const promise = loadCompressedTrailerModel(cfg.compressedUrl, cfg.url)
-            .then(source => buildRigidVehicle(source, cfg, tr));
+        const sourcePromise = loadCompressedGlb(cfg.compressedUrl, cfg.url);
+        const logoPromise = cfg.ivecoLogo ? loadIvecoLogoImage() : Promise.resolve(null);
+        const promise = Promise.all([sourcePromise, logoPromise])
+            .then(([source, logo]) => buildRigidVehicle(source, cfg, tr, logo));
         rigidVehiclePromises.set(tr.modelo, promise);
         promise.catch(() => {
             if (rigidVehiclePromises.get(tr.modelo) === promise) rigidVehiclePromises.delete(tr.modelo);
@@ -812,8 +832,11 @@ function joinVehicleGeometries(geometries) {
     return merged;
 }
 
-function recolorFrontFacadeTexture(texture) {
+function recolorFrontFacadeTexture(texture, ivecoLogo) {
     if (frontFacadeTextures.has(texture)) return frontFacadeTextures.get(texture);
+    if (!ivecoLogo) {
+        throw new Error('A logo Iveco não está disponível para a frente do caminhão.');
+    }
 
     const image = texture.image;
     const width = image?.naturalWidth || image?.width;
@@ -842,15 +865,29 @@ function recolorFrontFacadeTexture(texture) {
         const y = Math.floor(pixel / width) / height;
         // A textura embutida usa tons distintos para a grade, o painel e as barras.
         const isLogo = x >= 0.33 && x <= 0.68 && y >= 0.13 && y <= 0.205;
-        const blackDetail = luminance < 25
-            || (luminance >= 72 && luminance < 170)
-            || (isLogo && luminance > 180);
+        const blackDetail = !isLogo && (luminance < 25 || (luminance >= 72 && luminance < 170));
         const color = blackDetail ? [8, 10, 12] : [255, 255, 255];
         pixels.data[i] = color[0];
         pixels.data[i + 1] = color[1];
         pixels.data[i + 2] = color[2];
     }
     context.putImageData(pixels, 0, 0);
+
+    const logoBounds = {
+        x: width * 0.33,
+        y: height * 0.13,
+        width: width * 0.35,
+        height: height * 0.075
+    };
+    const logoWidth = logoBounds.width;
+    const logoHeight = logoWidth * ivecoLogo.naturalHeight / ivecoLogo.naturalWidth;
+    context.drawImage(
+        ivecoLogo,
+        logoBounds.x,
+        logoBounds.y + (logoBounds.height - logoHeight) / 2,
+        logoWidth,
+        logoHeight
+    );
 
     const recoloredTexture = texture.clone();
     recoloredTexture.image = canvas;
@@ -862,7 +899,7 @@ function recolorFrontFacadeTexture(texture) {
 // Remodela um caminhão 3D: a carroceria passa a ter exatamente o comprimento, a largura e a
 // altura de piso de `spec`, mantendo cabine e rodas com as proporções originais. O resultado
 // fica em metros, com a frente da carroceria em z = 0 e a traseira em z = -spec.mesa.
-function buildRigidVehicle(source, cfg, spec) {
+function buildRigidVehicle(source, cfg, spec, ivecoLogo) {
     const { bed, wheels } = cfg;
     const scale = cfg.preScale ?? spec.h / bed.floor;
     const bedLength = bed.front - bed.rear;
@@ -915,7 +952,7 @@ function buildRigidVehicle(source, cfg, spec) {
         const paint = cfg.paints.find(rule => rule.match.test(name));
         if (paint) {
             material.map = paint.recolorTexture && material.map
-                ? recolorFrontFacadeTexture(material.map)
+                ? recolorFrontFacadeTexture(material.map, ivecoLogo)
                 : null;
             material.metalnessMap = null;
             material.roughnessMap = null;
