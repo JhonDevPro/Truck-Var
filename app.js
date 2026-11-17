@@ -2649,6 +2649,30 @@ function resizeTransportAnimation(animation) {
     animation.renderer.setSize(width, height);
 }
 
+function getTransportBounds(root) {
+    const bounds = new THREE.Box3();
+    const instanceMatrix = new THREE.Matrix4();
+    const worldMatrix = new THREE.Matrix4();
+    const instanceBounds = new THREE.Box3();
+    root.updateMatrixWorld(true);
+    root.traverse(node => {
+        const geometry = node.geometry;
+        if (!geometry) return;
+        if (geometry.boundingBox === null) geometry.computeBoundingBox();
+        if (!geometry.boundingBox) return;
+        if (!node.isInstancedMesh) {
+            bounds.union(instanceBounds.copy(geometry.boundingBox).applyMatrix4(node.matrixWorld));
+            return;
+        }
+        for (let i = 0; i < node.count; i++) {
+            node.getMatrixAt(i, instanceMatrix);
+            worldMatrix.multiplyMatrices(node.matrixWorld, instanceMatrix);
+            bounds.union(instanceBounds.copy(geometry.boundingBox).applyMatrix4(worldMatrix));
+        }
+    });
+    return bounds;
+}
+
 function separateFortniteWheels(cab) {
     const body = cab.getObjectByName('Object_2');
     const geometry = body?.geometry;
@@ -3047,14 +3071,16 @@ async function openTransportAnimation() {
         if (!animation.active) return;
         model.scale.setScalar(1 / 3);
         model.updateMatrixWorld(true);
-        const bounds = new THREE.Box3().setFromObject(model);
+        const bounds = getTransportBounds(model);
         if (bounds.isEmpty()) throw new Error('O veículo não possui geometria 3D.');
         const center = bounds.getCenter(new THREE.Vector3());
-        model.position.set(-center.x, -bounds.min.y, -center.z);
+        const vehicleBounds = getTransportBounds(vehicle);
+        if (vehicleBounds.isEmpty()) throw new Error('O veículo não possui geometria 3D.');
+        model.position.set(-center.x, -vehicleBounds.min.y, -center.z);
         model.updateMatrixWorld(true);
         addTransportModelWheels(vehicle, animation.wheels, context.cab, cabModelId);
         if (context.rigidVehicle) addTransportRigidWheels(context.rigidVehicle, animation.wheels, tr);
-        frameFleetYard(animation, new THREE.Box3().setFromObject(model));
+        frameFleetYard(animation, getTransportBounds(model));
         transportStatus.textContent = '';
         animation.startedAt = performance.now();
         animation.frame = requestAnimationFrame(time => animateTransport(animation, time));

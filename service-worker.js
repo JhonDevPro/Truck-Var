@@ -1,4 +1,4 @@
-const CACHE_NAME = 'felka-cargas-v16';
+const CACHE_NAME = 'felka-cargas-v17';
 const APP_SHELL = [
     './',
     './index.html',
