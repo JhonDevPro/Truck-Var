@@ -171,3 +171,250 @@ body { font-family: 'Inter', sans-serif; background-color: #f8fafc; overflow-x: 
         font-size: 16px;
     }
 }
+
+:root {
+    --app-bg: #f1f5f9;
+    --surface: #ffffff;
+    --surface-raised: #f8fafc;
+    --surface-muted: #edf2f7;
+    --border: #dce5ef;
+    --text: #17243a;
+    --muted: #64748b;
+    --accent: #2563eb;
+    color-scheme: light;
+}
+:root[data-theme="dark"] {
+    --app-bg: #090d16;
+    --surface: #111827;
+    --surface-raised: #162033;
+    --surface-muted: #1e293b;
+    --border: #1e293b;
+    --text: #f8fafc;
+    --muted: #a4b5cb;
+    --accent: #60a5fa;
+    color-scheme: dark;
+}
+body {
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0 !important;
+    overflow: hidden;
+    background: var(--app-bg);
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+}
+.cockpit-shell {
+    height: 100%;
+    min-height: 0;
+    gap: 1rem;
+    align-items: stretch;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+}
+.panel-card {
+    min-width: 0;
+    background: var(--surface);
+    border-color: var(--border);
+    box-shadow: 0 8px 24px rgb(15 23 42 / 0.045);
+}
+.cockpit-topbar {
+    position: relative;
+    z-index: 20;
+    background: var(--surface);
+}
+.panel-header {
+    background: var(--surface-raised);
+    border-color: var(--border);
+}
+.panel-title { color: var(--text); }
+.cockpit-analysis .panel-header svg { color: var(--accent); }
+.cockpit-scroll { min-height: 0; }
+.cockpit-config, .cockpit-analysis { height: auto; min-height: 0; }
+.analysis-content { background: var(--surface-raised); }
+.theme-toggle {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    margin-left: auto;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 0.65rem;
+    background: var(--surface-raised);
+    color: var(--text);
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+.theme-toggle svg { width: 1rem; height: 1rem; }
+.theme-icon-sun, [data-theme="dark"] .theme-icon-moon { display: none; }
+[data-theme="dark"] .theme-icon-sun { display: block; }
+.theme-toggle:hover { border-color: var(--accent); }
+.theme-toggle:focus-visible, .cargo-primary:focus-visible,
+.viewport-header button:focus-visible { outline: 2px solid #60a5fa; outline-offset: 2px; }
+.vehicle-metrics > div {
+    min-width: 0;
+    padding: 0.55rem 0.65rem;
+    border: 1px solid var(--border);
+    border-radius: 0.6rem;
+    background: var(--surface-raised);
+}
+.vehicle-metrics label {
+    display: block;
+    color: var(--muted);
+    font-size: 0.625rem;
+    font-weight: 600;
+    line-height: 1.25;
+}
+.vehicle-metrics output {
+    display: block;
+    margin-top: 0.3rem;
+    color: var(--text);
+    font-size: 0.9rem;
+    font-weight: 750;
+}
+.cockpit-footer {
+    flex: none;
+    padding: 0.8rem 1.25rem;
+    border-top: 1px solid var(--border);
+    border-radius: 0 0 0.75rem 0.75rem;
+    background: var(--surface);
+}
+.cockpit-footer.hidden, .cockpit-footer .hidden { display: none; }
+.cargo-primary {
+    width: 100%;
+    min-height: 42px;
+    border-radius: 0.6rem;
+    background: #2563eb;
+    color: white;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    box-shadow: 0 5px 14px rgb(37 99 235 / 0.2);
+}
+.cargo-primary:hover { background: #1d4ed8; }
+.cargo-primary::before { content: "+"; margin-right: 0.5rem; font-size: 1.1rem; vertical-align: -1px; }
+.viewport-card { min-height: 0; overflow: hidden; }
+.viewport-header {
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    padding: 0.65rem 0.85rem;
+    border-color: var(--border);
+    background: var(--surface-raised);
+}
+.viewport-header button, .grid-badge {
+    border: 1px solid rgb(148 163 184 / 0.28);
+    background: rgb(255 255 255 / 0.75);
+    color: #334155;
+    box-shadow: 0 4px 14px rgb(15 23 42 / 0.08);
+    backdrop-filter: blur(12px);
+}
+.viewport-header button {
+    border-radius: 999px;
+    padding: 0.45rem 0.75rem;
+    font-size: 0.6875rem;
+    transition: border-color 150ms ease, color 150ms ease, background 150ms ease;
+}
+.viewport-header button:hover { border-color: #3b82f6; color: #1d4ed8; background: white; }
+.grid-badge { z-index: 1; letter-spacing: 0.05em; }
+.viewport-diagrams .panel-card { overflow: hidden; }
+.viewport-diagrams .panel-card > div:first-child {
+    border-color: var(--border);
+    background: var(--surface-raised);
+}
+.viewport-diagrams .h-2d-view { background: #f8fafc; }
+
+[data-theme="dark"] ::-webkit-scrollbar-track { background: #111827; }
+[data-theme="dark"] ::-webkit-scrollbar-thumb { background: #334155; }
+[data-theme="dark"] .vehicle-tabs,
+[data-theme="dark"] .bg-slate-100 { background-color: #1e293b; }
+[data-theme="dark"] .vehicle-selector-panel,
+[data-theme="dark"] .bg-white { background-color: #111827; }
+[data-theme="dark"] .bg-slate-50 { background-color: #162033; }
+[data-theme="dark"] .bg-indigo-50,
+[data-theme="dark"] .bg-blue-50 { background-color: #17243b; }
+[data-theme="dark"] .border-slate-100,
+[data-theme="dark"] .border-slate-200,
+[data-theme="dark"] .border-slate-300,
+[data-theme="dark"] .border-indigo-100,
+[data-theme="dark"] .border-indigo-200,
+[data-theme="dark"] .border-indigo-300,
+[data-theme="dark"] .border-blue-200 { border-color: #334155; }
+[data-theme="dark"] .text-slate-800,
+[data-theme="dark"] .text-slate-700,
+[data-theme="dark"] .text-slate-600 { color: #e2e8f0; }
+[data-theme="dark"] .text-slate-500,
+[data-theme="dark"] .text-slate-400 { color: #a4b5cb; }
+[data-theme="dark"] .text-indigo-900,
+[data-theme="dark"] .text-indigo-800,
+[data-theme="dark"] .text-blue-900,
+[data-theme="dark"] .text-blue-800,
+[data-theme="dark"] .text-amber-800,
+[data-theme="dark"] .text-emerald-800 { color: #bfdbfe; }
+[data-theme="dark"] input:not([type="checkbox"]),
+[data-theme="dark"] select,
+[data-theme="dark"] textarea {
+    background: #1e293b;
+    border-color: #334155;
+    color: #f8fafc;
+}
+[data-theme="dark"] input::placeholder { color: #a4b5cb; }
+[data-theme="dark"] input:disabled, [data-theme="dark"] select:disabled { color: #94a3b8; opacity: 0.8; }
+[data-theme="dark"] .vehicle-tab,
+[data-theme="dark"] .load-tab { color: #cbd5e1; }
+[data-theme="dark"] .vehicle-tab-active,
+[data-theme="dark"] .load-tab-active { background: #334155; color: #bfdbfe; }
+[data-theme="dark"] #alert_aet.bg-green-50 { background: #0c3028; border-color: #166c54; color: #bbf7d0; }
+[data-theme="dark"] #alert_aet.bg-amber-50,
+[data-theme="dark"] #spillover_alert { background: #392b17; border-color: #926b2e; color: #fde68a; }
+[data-theme="dark"] #alert_aet.bg-red-50 { background: #401b27; border-color: #93384b; color: #fecdd3; }
+[data-theme="dark"] .text-green-600,
+[data-theme="dark"] .text-emerald-700 { color: #6ee7b7; }
+[data-theme="dark"] .text-amber-600,
+[data-theme="dark"] .text-amber-900 { color: #fcd34d; }
+[data-theme="dark"] .text-red-600,
+[data-theme="dark"] .text-red-700 { color: #fda4af; }
+[data-theme="dark"] .text-blue-700 { color: #93c5fd; }
+[data-theme="dark"] #tag_tipo_prancha.bg-blue-100 { background: #17243b; color: #bfdbfe; }
+[data-theme="dark"] #tag_tipo_prancha.bg-amber-100 { background: #392b17; color: #fde68a; }
+[data-theme="dark"] #tag_tipo_prancha.bg-emerald-100 { background: #0c3028; color: #bbf7d0; }
+[data-theme="dark"] #vehicle_model_status,
+[data-theme="dark"] #cargo_model_status { background: #1e293b; }
+[data-theme="dark"] .viewport-header button,
+[data-theme="dark"] .grid-badge {
+    border-color: rgb(148 163 184 / 0.3);
+    background: rgb(30 41 59 / 0.75);
+    color: #e2e8f0;
+}
+[data-theme="dark"] .viewport-header button:hover { border-color: #60a5fa; background: #334155; }
+[data-theme="dark"] .viewport-diagrams .h-2d-view { background: #f8fafc; }
+[data-theme="dark"] #three-container { background: #131b2b; }
+[data-theme="dark"] .fleet-yard-header,
+[data-theme="dark"] .fleet-yard-actions button { background: #111827; border-color: #334155; color: #f8fafc; }
+[data-theme="dark"] .fleet-yard-header p { color: #a4b5cb; }
+[data-theme="dark"] #fleet_yard_status,
+[data-theme="dark"] #transport_animation_status { background: #1e293b; color: #fecdd3; }
+
+@media (min-width: 1280px) {
+    .cockpit-shell { grid-template-rows: auto minmax(0, 1fr); overflow: visible; scrollbar-gutter: auto; }
+    .cockpit-config, .cockpit-analysis { height: 100%; overflow: hidden; }
+    .cockpit-config > .cockpit-scroll, .cockpit-analysis > .cockpit-scroll { flex: 1; overflow-y: auto; }
+    .cockpit-visual { height: 100%; min-height: 0; align-self: stretch; gap: 1rem; }
+    .viewport-card > div:nth-child(2) { min-height: 0; }
+    #three-container { height: 100%; min-height: 0; flex: 1; }
+    .viewport-diagrams { height: 28%; min-height: 130px; max-height: 240px; flex: none; gap: 1rem; }
+    .viewport-diagrams .h-2d-view { height: auto; min-height: 0; flex: 1; }
+}
+@media (max-width: 1279px) {
+    .cockpit-shell { align-content: start; }
+    .cockpit-scroll { overflow: visible; }
+    .cockpit-footer { position: sticky; bottom: 0; z-index: 5; }
+}
+@media print {
+    body { height: auto; overflow: visible; background: white; }
+    .cockpit-shell { display: block; height: auto; overflow: visible; }
+    .cockpit-config, .cockpit-analysis, .cockpit-visual,
+    .cockpit-config > .cockpit-scroll, .cockpit-analysis > .cockpit-scroll { height: auto; overflow: visible; }
+    .cockpit-topbar, .cockpit-footer, .viewport-header button { display: none; }
+    #three-container { height: 400px; }
+    .viewport-diagrams { height: 220px; max-height: none; }
+}

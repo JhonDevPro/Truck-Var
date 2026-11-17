@@ -26,6 +26,10 @@ Para habilitar o banco em um projeto Supabase:
 
 A tabela aplica Row Level Security (RLS): cada conta só pode consultar, alterar ou excluir seus próprios planejamentos. A interface funciona sem login, mas a sincronização exige a migração e uma conexão à internet.
 
+## Interface e tema
+
+Use **Escuro/Claro** na barra superior para alternar o tema; a preferência fica salva neste navegador. Em telas largas, o cockpit mantém a visualização 3D visível e oferece rolagem independente nas colunas de configuração e análise. Em telas menores, o conteúdo é organizado em uma coluna com rolagem.
+
 ## Planejamento de cargas e tubos
 
 Na área de cargas, as abas **Cargas** e **Tubos** mantêm os planejamentos separados. Tubos são planejados somente para carretas de 14 m ou 15 m; o comprimento é definido automaticamente como 13 m ou 14 m, respectivamente. O cálculo usa o diâmetro externo efetivo, a largura útil e a altura informadas para estimar tubos por camada, camadas, capacidade, peso e viagens. A aba também mostra o arranjo na carroceria em 3D e o corte frontal, com opção para ilustrar quatro cintas e redes drapeadas e presas nas duas pontas; revise as dimensões, os dormentes e a amarração antes do transporte.
@@ -38,7 +42,7 @@ Para incluir novos arquivos, adicione também os nomes à lista `GENERAL_CARGO_F
 
 A opção **Comparar Frota (3D)** abre o Pátio da Frota sem alterar o planejamento. A cena reúne sete veículos, incluindo as pranchas reta e rebaixada com mesa de 7 m, com o cavalinho selecionado nas composições, grade de 1 metro, controles de órbita e repetição da animação. As dimensões dos modelos são aproximadas: o cadastro não informa o comprimento total dos caminhões ou das composições com cavalinho. Confira as medidas reais antes de utilizá-las no planejamento.
 
-**Animar Transporte** mostra o veículo e as cargas da visualização atual em uma estrada cercada por grama e montanhas, sob céu azul, com movimento contínuo e giro das rodas dos cavalinhos. A câmera gira lentamente e também pode ser controlada arrastando ou usando a roda do mouse; fechar a animação não altera o planejamento.
+**Animar Transporte** mostra o veículo e as cargas da visualização atual em uma estrada cercada por grama e montanhas, sob céu azul, com movimento contínuo e giro das rodas dos cavalinhos, caminhões e utilitários. A câmera gira lentamente e também pode ser controlada arrastando ou usando a roda do mouse; fechar a animação não altera o planejamento.
 
 A aba **Caminhões** do seletor de veículos usa caminhões com carroceria própria, sem cavalinho. As medidas informadas são internas; a largura externa soma 3 cm de cada lado e o piso real é 20 cm mais longo que o informado, para dar folga às cargas:
 

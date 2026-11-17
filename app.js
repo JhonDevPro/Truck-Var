@@ -98,6 +98,7 @@ const RIGID_VEHICLE_MODELS = {
         groundY: 0.01,
         bed: { front: 1.57, rear: -6.73, width: 2.60, floor: 1.67, floorWidth: 2.48, centerX: 0 },
         wheels: { z: [3.49, -3.75, -5.15], radius: 0.585, innerX: 0.6 },
+        animationWheels: { z: [1.92, -5.32, -6.72], y: 0.58, radius: 0.585, minX: 0.6, maxCenterOffset: 0.6, materials: /^(Tyre_rubber|Ascot_aluminium|Ascot_rubber__chassis)$/, hiddenMeshes: /^Object_(128|130|132)$/ },
         cabLight: { x: 0, y: 3.1, z: 1.9 },
         ivecoLogo: true,
         paints: [
@@ -115,6 +116,7 @@ const RIGID_VEHICLE_MODELS = {
         groundY: 0.01,
         bed: { front: 1.98, rear: -2.86, width: 2.08, floor: 1.47, floorWidth: 1.98, centerX: 0 },
         wheels: { z: [3.07, -1.47], radius: 0.515, innerX: 0.55 },
+        animationWheels: { z: [1.09, -3.45], y: 0.51, radius: 0.515, minX: 0.5, maxCenterOffset: 0.6, materials: /^(Tyre_rubber|Ascot_aluminium|Ascot_rubber__chassis)$/, hiddenMeshes: /^Object_(84|86)$/ },
         cabLight: { x: 0, y: 2.65, z: 1.3 },
         ivecoLogo: true,
         paints: [
@@ -132,6 +134,7 @@ const RIGID_VEHICLE_MODELS = {
         groundY: 0.0017,
         bed: { front: 1.46, rear: -3.78, width: 2.58, floor: 1.182, centerX: -0.01 },
         wheels: { z: [2.35, -2.74], radius: 0.48, innerX: 0.85 },
+        animationWheels: { z: [0.93, -4.21], y: 0.5, radius: 0.5, minX: 0.5, materials: /^jumbo-car$/, componentCounts: [81, 257] },
         cabLight: { x: 0, y: 2.2, z: 0.94 },
         brighten: true,
         paints: []
@@ -145,6 +148,7 @@ const RIGID_VEHICLE_MODELS = {
         groundY: 0.002,
         bed: { front: 0.25, rear: -1.60, width: 1.36, floor: 0.573, centerX: 0 },
         wheels: { z: [0.54, -1.34], radius: 0.25, innerX: 0.5 },
+        animationWheels: { z: [0.54, -1.34], y: 0.25, radius: 0.25, minX: 0.5, meshes: /^WHEEL_/ },
         cabLight: { x: 0, y: 1.3, z: 0.53 },
         brighten: true,
         paints: []
@@ -158,6 +162,7 @@ const RIGID_VEHICLE_MODELS = {
         groundY: 0,
         bed: { front: 3.49, rear: 0.28, width: 2.106, floor: 0.80, centerX: -1.142 },
         wheels: { z: [4.80, 1.40], radius: 0.40, innerX: 0.8 },
+        animationWheels: { z: [1.30, -2.08], y: 0.35, radius: 0.35, minX: 0.5, materials: /^Color_00[48]$/ },
         cabLight: { x: 0, y: 1.65, z: 0.71 },
         paints: [
             { match: /OrangeRed/i, color: VEHICLE_BODY_WHITE }
@@ -171,6 +176,7 @@ const RIGID_VEHICLE_MODELS = {
         preScale: 1.1,
         bed: { front: -0.53, rear: -1.857, width: 1.04, floor: 0.566, centerX: 0 },
         wheels: { z: [1.53, -0.48], radius: 0.26, innerX: 0.38, scale: 1.1, offsetY: 0.033 },
+        animationWheels: { z: [1.53, -0.48], y: 0.23, radius: 0.26, minX: 0.38, meshes: /^Tire_/ },
         cabLight: { x: 0, y: 0.98, z: 0.43 },
         paints: [
             { match: /BODYPAINT/i, color: VEHICLE_BODY_WHITE, metalness: 0.05, roughness: 0.68 },
@@ -690,10 +696,47 @@ const tubeResults = {
 const ctxSide = els.sideCanvas.getContext('2d');
 const ctxRear = els.rearCanvas.getContext('2d');
 
-let scene, camera, renderer, controls, trailerGroup, loadGroup;
+let scene, camera, renderer, controls, trailerGroup, loadGroup, sceneGrid;
 let currentTrailer = bdVeiculos["carreta_padrao"];
 let trailerChassisPromise;
 let draw3DRevision = 0;
+
+function applySceneTheme() {
+    if (!scene || !sceneGrid) return;
+    const dark = document.documentElement.dataset.theme === 'dark';
+    const background = dark ? 0x131b2b : 0xeef2f6;
+    scene.background = new THREE.Color(background);
+    scene.fog = dark ? new THREE.Fog(background, 120, 330) : null;
+    const center = new THREE.Color(dark ? 0x526783 : 0xcbd5e1);
+    const lines = new THREE.Color(dark ? 0x2c3c54 : 0xe2e8f0);
+    const colors = sceneGrid.geometry.getAttribute('color');
+    for (let i = 0; i < colors.count; i++) {
+        const color = i >= 400 && i < 404 ? center : lines;
+        colors.setXYZ(i, color.r, color.g, color.b);
+    }
+    colors.needsUpdate = true;
+}
+
+function applyTheme(theme) {
+    const dark = theme === 'dark';
+    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+    const button = document.getElementById('theme_toggle');
+    button.setAttribute('aria-pressed', String(dark));
+    button.setAttribute('aria-label', dark ? 'Ativar tema claro' : 'Ativar tema escuro');
+    document.getElementById('theme_toggle_label').textContent = dark ? 'Claro' : 'Escuro';
+    applySceneTheme();
+}
+
+applyTheme(document.documentElement.dataset.theme);
+document.getElementById('theme_toggle').addEventListener('click', () => {
+    const theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+    applyTheme(theme);
+    try {
+        localStorage.setItem('truck-var-theme', theme);
+    } catch (error) {
+        console.warn('Não foi possível salvar a preferência de tema.', error);
+    }
+});
 
 function loadCabModel(modelId) {
     if (!cabModelPromises.has(modelId)) {
@@ -912,6 +955,100 @@ function recolorFrontFacadeTexture(texture, ivecoLogo) {
     return recoloredTexture;
 }
 
+function splitRigidWheelGeometry(geometry, mesh, cfg) {
+    const config = cfg.animationWheels;
+    if ((config.meshes && !config.meshes.test(mesh.name)) ||
+        (config.materials && !config.materials.test(mesh.material?.name || ''))) return null;
+
+    const positions = geometry.attributes.position;
+    const index = geometry.index;
+    // Alguns GLBs juntam pneus, aros e carroceria em uma única malha.
+    const parents = Array.from({ length: positions.count }, (_, i) => i);
+    const vertices = new Map();
+    const find = i => {
+        while (parents[i] !== i) {
+            parents[i] = parents[parents[i]];
+            i = parents[i];
+        }
+        return i;
+    };
+    const join = (a, b) => { parents[find(b)] = find(a); };
+    for (let i = 0; i < positions.count; i++) {
+        const key = [positions.getX(i), positions.getY(i), positions.getZ(i)]
+            .map(value => value.toFixed(5)).join(',');
+        if (vertices.has(key)) join(i, vertices.get(key));
+        else vertices.set(key, i);
+    }
+    const count = index ? index.count : positions.count;
+    const vertexIndex = i => index ? index.getX(i) : i;
+    for (let i = 0; i < count; i += 3) {
+        join(vertexIndex(i), vertexIndex(i + 1));
+        join(vertexIndex(i), vertexIndex(i + 2));
+    }
+
+    const components = new Map();
+    const cos = Math.cos(cfg.rotationY), sin = Math.sin(cfg.rotationY);
+    for (let i = 0; i < positions.count; i++) {
+        const root = find(i);
+        if (!components.has(root)) components.set(root, { count: 0, bounds: new THREE.Box3() });
+        const component = components.get(root);
+        component.count++;
+        const x = positions.getX(i), y = positions.getY(i), z = positions.getZ(i);
+        component.bounds.expandByPoint(new THREE.Vector3(
+            (x * cos + z * sin) * cfg.unit - cfg.bed.centerX,
+            y * cfg.unit - cfg.groundY,
+            (-x * sin + z * cos) * cfg.unit - cfg.bed.front
+        ));
+    }
+    const componentAxles = new Map();
+    components.forEach((component, root) => {
+        const bounds = component.bounds;
+        if (config.componentCounts && !config.componentCounts.includes(component.count)) return;
+        if (bounds.min.x < config.minX * 0.75 && bounds.max.x > -config.minX * 0.75) return;
+        const tolerance = config.radius * 1.16;
+        if (bounds.min.y < config.y - tolerance || bounds.max.y > config.y + tolerance) return;
+        const center = bounds.getCenter(new THREE.Vector3());
+        const axle = config.z.findIndex(z =>
+            bounds.min.z >= z - tolerance && bounds.max.z <= z + tolerance &&
+            (config.maxCenterOffset === undefined ||
+                Math.hypot(center.y - config.y, center.z - z) <= config.radius * config.maxCenterOffset));
+        if (axle !== -1) componentAxles.set(root, axle);
+    });
+    const subsets = new Map();
+    for (let i = 0; i < count; i += 3) {
+        const a = vertexIndex(i), b = vertexIndex(i + 1), c = vertexIndex(i + 2);
+        const axle = componentAxles.get(find(a));
+        const key = axle === undefined ? -1 : axle;
+        if (!subsets.has(key)) subsets.set(key, []);
+        subsets.get(key).push(a, b, c);
+    }
+    return subsets.size === 1 && subsets.has(-1) ? null : subsets;
+}
+
+function rigidGeometrySubset(geometry, indices) {
+    const result = new THREE.BufferGeometry();
+    const remap = new Map();
+    const unique = [];
+    const mapped = indices.map(index => {
+        if (!remap.has(index)) {
+            remap.set(index, unique.length);
+            unique.push(index);
+        }
+        return remap.get(index);
+    });
+    Object.entries(geometry.attributes).forEach(([name, attribute]) => {
+        const array = new attribute.array.constructor(unique.length * attribute.itemSize);
+        unique.forEach((index, i) => {
+            for (let j = 0; j < attribute.itemSize; j++) {
+                array[i * attribute.itemSize + j] = attribute.array[index * attribute.itemSize + j];
+            }
+        });
+        result.setAttribute(name, new THREE.BufferAttribute(array, attribute.itemSize, attribute.normalized));
+    });
+    result.setIndex(mapped);
+    return result;
+}
+
 // Remodela um caminhão 3D: a carroceria passa a ter exatamente o comprimento, a largura e a
 // altura de piso de `spec`, mantendo cabine e rodas com as proporções originais. O resultado
 // fica em metros, com a frente da carroceria em z = 0 e a traseira em z = -spec.mesa.
@@ -1001,6 +1138,9 @@ function buildRigidVehicle(source, cfg, spec, ivecoLogo) {
 
     const point = [0, 0, 0];
     const geometriesByMaterial = new Map();
+    const hiddenTransportGeometries = new Map();
+    const wheelGeometries = cfg.animationWheels.z.map(() => new Map());
+    const wheelTireBounds = cfg.animationWheels.z.map(() => new THREE.Box3());
     meshes.forEach(mesh => {
         const geometry = mesh.geometry.clone();
         geometry.applyMatrix4(mesh.matrixWorld);
@@ -1013,7 +1153,13 @@ function buildRigidVehicle(source, cfg, spec, ivecoLogo) {
             }
         }
 
+        const hiddenInTransport = cfg.animationWheels.hiddenMeshes?.test(mesh.name);
+        const subsets = hiddenInTransport ? null : splitRigidWheelGeometry(geometry, mesh, cfg);
         const positions = geometry.attributes.position;
+        const wheelAxles = subsets ? new Int16Array(positions.count).fill(-1) : null;
+        if (subsets) subsets.forEach((indices, axle) => {
+            if (axle >= 0) indices.forEach(index => { wheelAxles[index] = axle; });
+        });
         const isTimberFloor = mesh.material?.name === 'Ascot_timber' && bed.floorWidth;
         const meshWidthFactor = isTimberFloor
             ? (spec.w / scale) / bed.floorWidth
@@ -1023,15 +1169,18 @@ function buildRigidVehicle(source, cfg, spec, ivecoLogo) {
             const x = positions.getX(i);
             const y = positions.getY(i);
             const z = positions.getZ(i);
-            reshape(
-                (x * cos + z * sin) * cfg.unit - bed.centerX,
-                y * cfg.unit - cfg.groundY,
-                (-x * sin + z * cos) * cfg.unit - bed.front,
-                point,
-                meshWidthFactor,
-                isWheel,
-                Boolean(isTimberFloor)
-            );
+            const modelX = (x * cos + z * sin) * cfg.unit - bed.centerX;
+            const modelY = y * cfg.unit - cfg.groundY;
+            const modelZ = (-x * sin + z * cos) * cfg.unit - bed.front;
+            const axle = wheelAxles ? wheelAxles[i] : -1;
+            if (axle >= 0) {
+                const axleZ = cfg.animationWheels.z[axle];
+                point[0] = modelX;
+                point[1] = modelY * wheelScale + (wheels.offsetY ?? 0);
+                point[2] = mapZ(axleZ) + (modelZ - axleZ) * wheelScale;
+            } else {
+                reshape(modelX, modelY, modelZ, point, meshWidthFactor, isWheel, Boolean(isTimberFloor));
+            }
             positions.setXYZ(i, point[0] * scale, point[1] * scale, point[2] * scale);
         }
         const normals = geometry.attributes.normal;
@@ -1044,8 +1193,26 @@ function buildRigidVehicle(source, cfg, spec, ivecoLogo) {
         }
 
         const material = paintMaterial(mesh.material);
-        if (!geometriesByMaterial.has(material)) geometriesByMaterial.set(material, []);
-        geometriesByMaterial.get(material).push(geometry);
+        if (!subsets) {
+            const target = hiddenInTransport ? hiddenTransportGeometries : geometriesByMaterial;
+            if (!target.has(material)) target.set(material, []);
+            target.get(material).push(geometry);
+        } else {
+            subsets.forEach((indices, axle) => {
+                const part = rigidGeometrySubset(geometry, indices);
+                const target = axle < 0 ? geometriesByMaterial : wheelGeometries[axle];
+                if (!target.has(material)) target.set(material, []);
+                target.get(material).push(part);
+                if (axle >= 0) {
+                    part.computeBoundingBox();
+                    const size = part.boundingBox.getSize(new THREE.Vector3());
+                    if (size.y > cfg.animationWheels.radius * scale) {
+                        wheelTireBounds[axle].union(part.boundingBox);
+                    }
+                }
+            });
+            geometry.dispose();
+        }
     });
 
     // Junta as peças que usam o mesmo material para reduzir as chamadas de desenho.
@@ -1056,6 +1223,36 @@ function buildRigidVehicle(source, cfg, spec, ivecoLogo) {
         merged.receiveShadow = true;
         merged.userData.sharedResource = true;
         root.add(merged);
+    });
+    hiddenTransportGeometries.forEach((geometries, material) => {
+        const merged = new THREE.Mesh(mergeVehicleGeometries(geometries), material);
+        merged.castShadow = true;
+        merged.receiveShadow = true;
+        merged.userData.sharedResource = true;
+        merged.userData.hiddenInTransport = true;
+        root.add(merged);
+    });
+    wheelGeometries.forEach((materials, axle) => {
+        if (!materials.size) return;
+        if (wheelTireBounds[axle].isEmpty()) {
+            materials.forEach(geometries => geometries.forEach(geometry => {
+                geometry.computeBoundingBox();
+                wheelTireBounds[axle].union(geometry.boundingBox);
+            }));
+        }
+        const center = wheelTireBounds[axle].getCenter(new THREE.Vector3());
+        const pivot = new THREE.Group();
+        pivot.position.set(0, center.y, center.z);
+        pivot.userData.rigidWheelRadius = wheelTireBounds[axle].getSize(new THREE.Vector3()).y / 2;
+        materials.forEach((geometries, material) => {
+            const merged = new THREE.Mesh(mergeVehicleGeometries(geometries), material);
+            merged.position.set(0, -center.y, -center.z);
+            merged.castShadow = true;
+            merged.receiveShadow = true;
+            merged.userData.sharedResource = true;
+            pivot.add(merged);
+        });
+        root.add(pivot);
     });
 
     if (cfg.bedFloorColor !== undefined) {
@@ -1714,7 +1911,7 @@ function editarCarga(index) {
         generalCargo.stack.checked = carga.colocarSobreAnterior === true;
         atualizarBotaoCarga();
         renderListaCargas();
-        generalCargo.add.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        generalCargo.model.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         return;
     }
     setCargaTab('cargas');
@@ -1731,7 +1928,7 @@ function editarCarga(index) {
     inputArmador.value = carga.armador || 'generico';
     atualizarBotaoCarga();
     renderListaCargas();
-    els.btnAdicionar.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    tipoCargaSelect.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 window.removerCarga = function(index) {
@@ -1881,7 +2078,6 @@ function addVehicleSceneLights(targetScene) {
 function initThreeJS() {
     const container = document.getElementById('three-container');
     scene = new THREE.Scene();
-    scene.background = new THREE.Color('#eef2f6');
 
     camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
 
@@ -1912,9 +2108,13 @@ function initThreeJS() {
     plane.receiveShadow = true;
     scene.add(plane);
 
-    const gridHelper = new THREE.GridHelper(600, 200, 0xcbd5e1, 0xe2e8f0);
-    gridHelper.position.y = 0.01;
-    scene.add(gridHelper);
+    sceneGrid = new THREE.GridHelper(600, 200, 0xcbd5e1, 0xe2e8f0);
+    sceneGrid.position.y = 0.01;
+    scene.add(sceneGrid);
+    applySceneTheme();
+    if (typeof ResizeObserver === 'function') {
+        new ResizeObserver(resizeMainView).observe(container);
+    }
 
     function animate() {
         requestAnimationFrame(animate);
@@ -2290,6 +2490,18 @@ function addTransportModelWheels(model, wheels, cab, cabModelId) {
     });
 }
 
+function addTransportRigidWheels(vehicle, wheels, tr) {
+    const pivots = vehicle.children.filter(child => child.userData.rigidWheelRadius);
+    if (pivots.length !== RIGID_VEHICLE_MODELS[tr.modelo].animationWheels.z.length) {
+        throw new Error(`Não foi possível identificar as rodas do veículo ${tr.modelo}.`);
+    }
+    pivots.forEach(pivot => {
+        const scale = pivot.getWorldScale(new THREE.Vector3());
+        // A frente dos caminhões aponta para +Z; a estrada se desloca para -Z.
+        wheels.push({ group: pivot, radius: pivot.userData.rigidWheelRadius * scale.y, direction: 1 });
+    });
+}
+
 function animateTransport(animation, now) {
     if (!animation.active) return;
     animation.frame = requestAnimationFrame(time => animateTransport(animation, time));
@@ -2299,7 +2511,7 @@ function animateTransport(animation, now) {
     });
     animation.wheels.forEach(wheel => {
         if (wheel.axis) wheel.group.quaternion.setFromAxisAngle(wheel.axis, -distance / wheel.radius);
-        else wheel.group.rotation.x = -distance / wheel.radius;
+        else wheel.group.rotation.x = (wheel.direction ?? -1) * distance / wheel.radius;
     });
     animation.controls.update();
     animation.renderer.render(animation.scene, animation.camera);
@@ -2556,6 +2768,7 @@ async function openTransportAnimation() {
         model.position.set(-center.x, -bounds.min.y, -center.z);
         model.updateMatrixWorld(true);
         addTransportModelWheels(vehicle, animation.wheels, context.cab, cabModelId);
+        if (context.rigidVehicle) addTransportRigidWheels(context.rigidVehicle, animation.wheels, tr);
         frameFleetYard(animation, new THREE.Box3().setFromObject(model));
         transportStatus.textContent = '';
         animation.startedAt = performance.now();
@@ -2675,6 +2888,11 @@ function getSpilloverSuggestion() {
     return { totalPieces, totalWeight, vehicle: vehicle?.name || 'Outra Carreta' };
 }
 
+function setStatusIcon(isNormal) {
+    document.getElementById('icon_aet_check').classList.toggle('hidden', !isNormal);
+    document.getElementById('icon_aet_warning').classList.toggle('hidden', isNormal);
+}
+
 function analyzeTubesAndDraw(tr, isCarreta) {
     const tube = getTubeMetrics(tr);
     renderTubeResults(tube);
@@ -2735,6 +2953,7 @@ function analyzeTubesAndDraw(tr, isCarreta) {
             : 'bg-green-50 border-green-200 text-green-800';
     els.alertAet.className = `rounded-md p-4 shadow-sm border transition-colors duration-300 ${alertClass}`;
     els.iconAet.className = `w-5 h-5 ${hardLimitExceeded ? 'text-red-600' : operationalWarning ? 'text-amber-600' : 'text-green-600'}`;
+    setStatusIcon(!hardLimitExceeded && !operationalWarning);
 
     draw3D(tr, inputs.posicao.value, isCarreta);
     draw2D(tr, inputs.posicao.value, isCarreta);
@@ -2858,6 +3077,7 @@ function analyzeAndDraw() {
     }
     els.alertAet.className = `rounded-md p-4 shadow-sm border transition-colors duration-300 ${alertClass}`;
     els.iconAet.className = `w-5 h-5 ${iconColor}`;
+    setStatusIcon(composicaoCargas.length > 0 && !reqAET && aetMotivo === '');
 
     let excesso = (totalLargMax - tr.w) / 2;
     if (excesso <= 0) {
@@ -3360,6 +3580,12 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
             object.scale.setScalar(S);
             object.position.set(0, 0, shiftZ);
             trailerGroup.add(object);
+            if (comparison?.includeLoads) {
+                object.traverse(node => {
+                    if (node.userData.hiddenInTransport) node.visible = false;
+                });
+                comparison.rigidVehicle = object;
+            }
             if (!comparison) {
                 if (!comparison) setVehicleModelStatus('');
                 frameVehicleView();
@@ -5268,15 +5494,18 @@ function drawRear2D(ctx, canvas, tr, pos, isCarreta) {
     }
 }
 
-window.addEventListener('resize', () => {
+function resizeMainView() {
     const container = document.getElementById('three-container');
-    if (camera && renderer) {
-        camera.aspect = container.clientWidth / container.clientHeight;
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+    if (camera && renderer && width && height) {
+        camera.aspect = width / height;
         camera.updateProjectionMatrix();
-        renderer.setSize(container.clientWidth, container.clientHeight);
-        if (trailerGroup && loadGroup) analyzeAndDraw();
+        renderer.setSize(width, height);
+        if (trailerGroup && loadGroup) draw2D(currentTrailer, inputs.posicao.value, isMesaOnlyVehicle(currentTrailer));
     }
-});
+}
+window.addEventListener('resize', resizeMainView);
 
 const tipoCargaSelect = document.getElementById('input_tipo_carga');
 const divArmador = document.getElementById('div_armador');
@@ -5367,6 +5596,9 @@ function setCargaTab(tab) {
     panelCargas.classList.toggle('hidden', tab !== 'cargas');
     panelGerais.classList.toggle('hidden', tab !== 'gerais');
     panelTubos.classList.toggle('hidden', !isTubes);
+    document.getElementById('cargo_actions').classList.toggle('hidden', isTubes);
+    els.btnAdicionar.classList.toggle('hidden', tab !== 'cargas');
+    generalCargo.add.classList.toggle('hidden', tab !== 'gerais');
     document.getElementById('composition_panel').classList.toggle('hidden', isTubes);
     els.cargoSummary.container.classList.toggle('hidden', isTubes);
     els.tubeSummary.classList.toggle('hidden', !isTubes);
