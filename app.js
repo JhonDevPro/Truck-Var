@@ -40,28 +40,32 @@ function usesSideGates(tr, isCarreta) {
     return isCarreta && inputs.tampas.value === 'com' && tr.tipo !== 'sider' && tr.tipo !== 'carreta_bau';
 }
 
+// Posição da quinta-roda em metros após a transformação original de cada modelo.
 const CAB_MODELS = {
-    semi_obj: { format: 'obj' },
+    semi_obj: { format: 'obj', fifthWheel: { z: 1.07, y: 1.16 } },
     tractor_cab_burnout_3: { 
         format: 'gltf', 
         url: './tractor_cab_burnout_3.glb', 
         scale: 1.2, 
         rotationY: 0, 
-        offsetY: 1 
+        offsetY: 1,
+        fifthWheel: { z: 1.68, y: 1.28 }
     },
     fortnite_semi_truck: { 
         format: 'gltf', 
         url: './fortnite_semi_truck.glb', 
         scale: 1.2, 
         rotationY: Math.PI, 
-        offsetY: 1 
+        offsetY: 1,
+        fifthWheel: { z: 1.47, y: 1.27 }
     },
     semi_truck_burnout_revenge: { 
         format: 'gltf', 
         url: './semi_truck_burnout_revenge.glb', 
         scale: 1.0, 
         rotationY: 0, 
-        offsetY: 0 
+        offsetY: 0,
+        fifthWheel: { z: 2.08, y: 1.11 }
     },
     scania_s_730: {
         format: 'gltf',
@@ -71,6 +75,7 @@ const CAB_MODELS = {
         rotationY: 0,
         alignToGround: true,
         offsetZ: -2.6,
+        fifthWheel: { z: 0.96, y: 1.04 },
         bodyColor: 0xf2f2f0,
         grayMeshNames: ['Object_56', 'Object_83', 'Object_125'],
         whiteMeshNames: ['Object_30', 'Object_58'],
@@ -503,7 +508,18 @@ function isLockedLoad(type, tr) {
         /container|cesta/i.test(model.file));
 }
 
+function isContainerLoad(type) {
+    const model = generalCargoByType.get(type);
+    return CONTAINER_LOAD_TYPES.has(type) || /container/i.test(model?.file || '');
+}
+
+function requiresLoadLockClearance(type, tr) {
+    if (tr?.modelo === 'truck') return isContainerLoad(type);
+    return tr?.tipo !== 'caminhao' && isLockedLoad(type, tr);
+}
+
 function getLoadStartClearance(type, tr) {
+    if (tr?.modelo === 'truck' && isContainerLoad(type)) return 1;
     if (tr?.tipo === 'caminhao') return 0.1;
     return isLockedLoad(type, tr) ? 1.4 : 0.2;
 }
@@ -675,7 +691,7 @@ const ctxSide = els.sideCanvas.getContext('2d');
 const ctxRear = els.rearCanvas.getContext('2d');
 
 let scene, camera, renderer, controls, trailerGroup, loadGroup;
-let currentTrailer = bdVeiculos["prancha_reb_6_3"];
+let currentTrailer = bdVeiculos["carreta_padrao"];
 let trailerChassisPromise;
 let draw3DRevision = 0;
 
@@ -1132,7 +1148,7 @@ function setVehicleSelectorTab(tab) {
 document.querySelectorAll('[data-vehicle-tab]').forEach(button => {
     button.addEventListener('click', () => setVehicleSelectorTab(button.dataset.vehicleTab));
 });
-setVehicleSelectorTab('prancha');
+setVehicleSelectorTab('carreta');
 
 inputs.cavalinho.addEventListener('change', analyzeAndDraw);
 inputs.posicao.addEventListener('change', analyzeAndDraw);
@@ -1180,7 +1196,7 @@ function getGridMetrics(tr, carga, isCarreta, cComp = carga.comp) {
     const standardGap = getLoadGap(type);
     const usesGates = usesSideGates(tr, isCarreta);
     const availableWidth = usesGates ? tr.w_util : tr.w;
-    const lockClearance = isCarreta && tr.tipo !== 'caminhao' && isLockedLoad(type, tr)
+    const lockClearance = isCarreta && requiresLoadLockClearance(type, tr)
         ? getLoadStartClearance(type, tr)
         : 0;
     const isDistributed = isCarreta &&
@@ -1395,7 +1411,7 @@ function positionLoadAllocations(tr, isCarreta, allocations) {
         const distributedLoads = loads.filter(load => load.grid.isDistributed);
         if (distributedLoads.length) {
             distributedLoads.forEach(load => {
-                load.startOffset = tr.tipo !== 'caminhao' && isLockedLoad(load.carga.type, tr)
+                load.startOffset = requiresLoadLockClearance(load.carga.type, tr)
                     ? load.clearance
                     : 0;
             });
@@ -1462,7 +1478,7 @@ function positionLoadAllocations(tr, isCarreta, allocations) {
                 (Math.max(1, tr.eixos) - 1) * axleLayout.spacing / 2;
             const axleCenterOffset = tr.mesa - axleCenterFromRear;
             const minimumStart = concentratedLoads.reduce(
-                (min, load) => tr.tipo !== 'caminhao' && isLockedLoad(load.carga.type, tr)
+                (min, load) => requiresLoadLockClearance(load.carga.type, tr)
                     ? Math.max(min, load.clearance - load.startOffset)
                     : min,
                 0
@@ -1506,7 +1522,7 @@ function positionLoadAllocations(tr, isCarreta, allocations) {
 
             rearQueueStarted = true;
             load.startOffset = normalRearOffset + normalRearGap;
-            if (tr.tipo !== 'caminhao' && isLockedLoad(load.carga.type, tr)) {
+            if (requiresLoadLockClearance(load.carga.type, tr)) {
                 load.startOffset = Math.max(load.startOffset, load.clearance);
             }
             normalRearOffset = load.startOffset + load.grid.totalComp;
@@ -1596,12 +1612,8 @@ function getLoadSequenceMetrics(tr, isCarreta) {
     const allocations = composicaoCargas.map(() => 0);
     cargasTransbordo = [];
 
-    const fitsVehicle = sequence => {
-        const weight = sequence.loads.reduce(
-            (total, load) => total + load.carga.peso * load.carga.qtd,
-            0
-        );
-        if (weight > tr.cap + 1e-9) return false;
+    // O peso gera alerta operacional, mas não deve ocultar a carga na prévia.
+    const fitsCargoArea = sequence => {
         if (isCarreta) return sequence.mesaComp <= tr.mesa + 1e-9;
         if (sequence.loads.some(load => load.splitCoils)) {
             return sequence.mesaComp <= tr.mesa + 1e-9 &&
@@ -1619,7 +1631,7 @@ function getLoadSequenceMetrics(tr, isCarreta) {
             const candidate = Math.ceil((low + high) / 2);
             allocations[index] = candidate;
             const sequence = positionLoadAllocations(tr, isCarreta, allocations);
-            if (fitsVehicle(sequence)) low = candidate;
+            if (fitsCargoArea(sequence)) low = candidate;
             else high = candidate - 1;
         }
         allocations[index] = low;
@@ -2349,9 +2361,12 @@ function analyzeAndDraw() {
     }
 
     if (pesoTotal > tr.cap) {
-        reqAET = true; 
         aetMotivo += aetMotivo ? " E " : "ALERTA: ";
         aetMotivo += `O peso total somado (${pesoTotal.toFixed(2)}t) excede a capacidade do veículo (${tr.cap.toFixed(2)}t).`;
+        if (!reqAET) {
+            alertClass = "bg-amber-50 border-amber-200 text-amber-800";
+            iconColor = "text-amber-600";
+        }
     }
 
     const areaExcedida = [];
@@ -2930,6 +2945,12 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
             if (!isCurrent()) return;
 
             const chassis = source.clone(true);
+            // O pino do GLB é substituído pelo pino alinhado à quinta-roda.
+            const originalKingpin = chassis.getObjectByName('mesh_32');
+            if (!originalKingpin || originalKingpin.material?.name !== 'plastic_black.002') {
+                throw new Error('Não foi possível localizar o pino original do chassi da carreta.');
+            }
+            originalKingpin.visible = false;
             chassis.rotation.y = Math.PI / 2;
             chassis.updateMatrixWorld(true);
 
@@ -3204,6 +3225,17 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
         }
 
         if (isCurrent()) {
+            const fifthWheel = CAB_MODELS[cabModelId].fifthWheel;
+            const kingpinZ = shiftZ - 0.5 * S;
+            object.position.z += kingpinZ - fifthWheel.z * S;
+            const kingpinTop = (isCarreta ? deckY - 0.26 * S : pH - 0.2 * S);
+            const kingpinBottom = fifthWheel.y * S - 0.03 * S;
+            const kingpinHeight = kingpinTop - kingpinBottom;
+            const kingpin = mesh(
+                new THREE.CylinderGeometry(0.08*S, 0.08*S, kingpinHeight, 16),
+                steel, 0, (kingpinTop + kingpinBottom) / 2, kingpinZ
+            );
+            kingpin.name = 'trailer_kingpin';
             trailerGroup.add(object);
             if (!comparison) frameVehicleView();
         }
@@ -3251,8 +3283,6 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
                 }
             }
         } else {
-            mesh(new THREE.CylinderGeometry(0.08*S, 0.08*S, 0.3*S, 16), steel, 0, deckY-0.25*S, -0.5*S + shiftZ);
-
             const lgZ = -1.8 * S + shiftZ;
             box(0.1*S, deckY - 0.2*S, 0.15*S, frame, wT/2 - 0.3*S, (deckY - 0.2*S)/2, lgZ);
             box(0.1*S, deckY - 0.2*S, 0.15*S, frame, -wT/2 + 0.3*S, (deckY - 0.2*S)/2, lgZ);
@@ -3387,8 +3417,6 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
         box(wT*.9, 0.04*S, pL*.96, woodMat, 0, pH+0.02*S, -pL/2 + shiftZ); 
         drawDeckDetails(wT,pL,-pL/2+shiftZ,pH+0.045*S);
         
-        mesh(new THREE.CylinderGeometry(0.08*S, 0.08*S, 0.3*S, 16), steel, 0, pH-0.35*S, -0.5*S + shiftZ); 
-
         if (tr.tipo==='reta'){
             box(wT, 0.24*S, mL, deckMat, 0, pH-0.12*S, -pL-mL/2 + shiftZ);
             box(wT*.9, 0.045*S, mL*.96, woodMat, 0, pH+0.02*S, -pL-mL/2 + shiftZ);

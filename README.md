@@ -11,7 +11,7 @@ O workflow **Publish PWA and build Android APK** publica a versão web no GitHub
 
 O APK precisa de conexão à internet para abrir o site e receber as atualizações. Ações que alterem o código nativo ou os metadados do aplicativo ainda exigem gerar e distribuir um APK novo. O pacote Android não inclui os modelos 3D; eles são carregados pelo site publicado.
 
-O PWA mantém os arquivos principais, as bibliotecas do Three.js e os modelos 3D compactados em cache após o primeiro carregamento online. Os modelos selecionados são baixados sob demanda; Scania e chassi da carreta são pré-carregados para agilizar a composição e a animação da frota. A publicação compacta os GLBs de cargas gerais durante o build.
+O PWA mantém os arquivos principais, as bibliotecas do Three.js e os modelos 3D compactados em cache após o primeiro carregamento online. Ao abrir o sistema, a composição inicial é o Scania S-730 com a carreta padrão de 14 m. Os modelos selecionados são baixados sob demanda; Scania e chassi da carreta são pré-carregados para agilizar a composição e a animação da frota. A publicação compacta os GLBs de cargas gerais durante o build.
 
 ## Supabase e planejamentos na nuvem
 
@@ -47,6 +47,8 @@ A aba **Caminhões** do seletor de veículos usa caminhões com carroceria próp
 | VUC / F350 (Chevrolet, Honda ou Mercedes-Benz) | 4 m × 2 m | 4,20 m × 2,06 m | 1,10 m | 1 t |
 | Utilitário Saveiro | 1,6 m × 1 m | 1,80 m × 1,06 m | 0,80 m | 400 kg |
 
-No Truck e no Toco, **Com tampas laterais** limita a carga a 2,44 m e **Sem tampas laterais** libera os 2,50 m; o malhal (frente) e a tampa traseira sempre aparecem, assim como a sinalização vermelha e branca colada na lateral, na linha do assoalho. As paredes dos VUC e do Saveiro fazem parte do modelo 3D e sempre limitam a carga à largura interna.
+No Truck e no Toco, **Com tampas laterais** limita a carga a 2,44 m e **Sem tampas laterais** libera os 2,50 m; o malhal (frente) e a tampa traseira sempre aparecem, assim como a sinalização vermelha e branca colada na lateral, na linha do assoalho. No Truck, containers ficam a 1 m do malhal para deixar livre a área dos locks. As paredes dos VUC e do Saveiro fazem parte do modelo 3D e sempre limitam a carga à largura interna.
+
+O sobrepeso é indicado como atenção operacional e, sozinho, não marca a operação como AET obrigatória.
 
 Os modelos 3D ficam em `caminhões/`. Ao carregar, cada modelo é remodelado para que a carroceria tenha exatamente as medidas acima (veja `RIGID_VEHICLE_MODELS` em `app.js`), recebe a cor padrão branca com detalhes em cinza escuro e uma luz interna na cabine. O Truck e o Toco usam a logo Iveco em `assets/iveco-logo.png`, inclusive no Pátio da Frota 3D. Para trocar um modelo ou ajustar as medidas, edite as entradas `caminhao_*` de `bdVeiculos` e a configuração do modelo correspondente. O comando `npm run build:web` publica cada modelo compactado em `modelos/*.glb.gz`; o site baixa somente as versões compactadas e só carrega o modelo do veículo escolhido.

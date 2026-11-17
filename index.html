@@ -81,8 +81,8 @@
                 <div>
                     <div class="vehicle-tabs" role="tablist" aria-label="Tipo de veículo">
                         <button id="tab_cavalinho" type="button" role="tab" aria-selected="false" aria-controls="panel_cavalinho" data-vehicle-tab="cavalinho" class="vehicle-tab">Cavalinho</button>
-                        <button id="tab_prancha" type="button" role="tab" aria-selected="true" aria-controls="panel_prancha" data-vehicle-tab="prancha" class="vehicle-tab vehicle-tab-active">Prancha</button>
-                        <button id="tab_carreta" type="button" role="tab" aria-selected="false" aria-controls="panel_carreta" data-vehicle-tab="carreta" class="vehicle-tab">Carreta</button>
+                        <button id="tab_prancha" type="button" role="tab" aria-selected="false" aria-controls="panel_prancha" data-vehicle-tab="prancha" class="vehicle-tab">Prancha</button>
+                        <button id="tab_carreta" type="button" role="tab" aria-selected="true" aria-controls="panel_carreta" data-vehicle-tab="carreta" class="vehicle-tab vehicle-tab-active">Carreta</button>
                         <button id="tab_caminhao" type="button" role="tab" aria-selected="false" aria-controls="panel_caminhao" data-vehicle-tab="caminhao" class="vehicle-tab">Caminhões</button>
                     </div>
                     <div class="vehicle-selector-panel">
@@ -96,11 +96,11 @@
                                 <option value="scania_s_730" selected>Scania S-730</option>
                             </select>
                         </div>
-                        <div id="panel_prancha" role="tabpanel" aria-labelledby="tab_prancha">
+                        <div id="panel_prancha" role="tabpanel" aria-labelledby="tab_prancha" class="hidden">
                             <label for="input_placa" class="block text-xs font-bold text-blue-800 mb-2 uppercase tracking-wide">Selecionar Prancha</label>
                             <select id="input_placa" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold bg-white text-slate-700">
-                                <option value="">-- Nenhuma Prancha --</option>
-                                <option value="prancha_reb_6_3" selected>Prancha Rebaixada 3 Eixos (Mesa 6.3m)</option>
+                                <option value="" selected>-- Nenhuma Prancha --</option>
+                                <option value="prancha_reb_6_3">Prancha Rebaixada 3 Eixos (Mesa 6.3m)</option>
                                 <option value="prancha_reb_7_0">Prancha Rebaixada 3 Eixos (Mesa 7.0m)</option>
                                 <option value="prancha_reb_6_0">Prancha Rebaixada 3 Eixos (Mesa 6.0m)</option>
                                 <option value="prancha_reta_12_5">Prancha Reta 3 Eixos (Mesa 12.5m)</option>
@@ -111,13 +111,13 @@
                                 <option value="prancha_lagartixa">Prancha Lagartixa (14m, altura 0,50m)</option>
                             </select>
                         </div>
-                        <div id="panel_carreta" role="tabpanel" aria-labelledby="tab_carreta" class="hidden">
+                        <div id="panel_carreta" role="tabpanel" aria-labelledby="tab_carreta">
                             <label for="input_placa_carreta" class="block text-xs font-bold text-amber-800 mb-2 uppercase tracking-wide">Selecionar Carreta</label>
                             <select id="input_placa_carreta" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 font-semibold bg-white text-slate-700">
                                 <option value="">-- Nenhuma Carreta --</option>
                                 <option value="carreta_ext">Carreta Extensiva (15m)</option>
                                 <option value="carreta_bau_15">Carreta Baú Azul-marinho (15m)</option>
-                                <option value="carreta_padrao">Carreta Padrão (14m)</option>
+                                <option value="carreta_padrao" selected>Carreta Padrão (14m)</option>
                                 <option value="carreta_vand">Carreta Vanderléia (14m)</option>
                                 <option value="carreta_sider">Carreta Sider (14m)</option>
                             </select>
