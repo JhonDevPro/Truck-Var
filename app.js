@@ -4432,6 +4432,20 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
         mesh(new THREE.CylinderGeometry(0.48*S, 0.48*S, spareWidth, 32), rubber, 0, spareWidth/2, 0, spare);
         mesh(new THREE.CylinderGeometry(0.26*S, 0.26*S, spareWidth + 0.01*S, 32), rim, 0, spareWidth/2, 0, spare);
         mesh(new THREE.CylinderGeometry(0.1*S, 0.1*S, spareWidth + 0.02*S, 24), steel, 0, spareWidth/2, 0, spare);
+
+        const supportZ = shiftZ - pL + 0.48*S;
+        const supportTop = pH - 0.1*S;
+        [-1, 1].forEach(side => {
+            const support = new THREE.Group();
+            support.name = 'pe_de_apoio';
+            support.position.set(side*wT*0.32, 0, supportZ);
+            trailerGroup.add(support);
+            const outerBottom = 0.76*S;
+            box(0.24*S, supportTop-outerBottom, 0.24*S, frame, 0, (supportTop+outerBottom)/2, 0, support);
+            box(0.16*S, 0.52*S, 0.16*S, frame, 0, 0.60*S, 0, support);
+            const foot = mesh(new THREE.CylinderGeometry(0.11*S, 0.22*S, 0.14*S, 4), frame, 0, 0.35*S, 0, support);
+            foot.rotation.y = Math.PI/4;
+        });
         
         if (tr.tipo==='reta'){
             box(wT, 0.24*S, mL, deckMat, 0, pH-0.12*S, -pL-mL/2 + shiftZ);
@@ -5934,6 +5948,10 @@ function drawSide2D(ctx, canvas, tr, pos, isCarreta) {
         ctx.fillRect(startX - pL, groundY - pH, pL, 0.3*scale); 
         ctx.fillStyle = '#1e293b';
         ctx.fillRect(startX - pL/2 - 0.48*scale, groundY - pH - 0.3*scale, 0.96*scale, 0.3*scale);
+        const supportX = startX - pL + 0.48*scale;
+        ctx.fillRect(supportX - 0.12*scale, groundY - pH + 0.1*scale, 0.24*scale, pH - 0.86*scale);
+        ctx.fillRect(supportX - 0.08*scale, groundY - 0.86*scale, 0.16*scale, 0.52*scale);
+        ctx.fillRect(supportX - 0.22*scale, groundY - 0.42*scale, 0.44*scale, 0.14*scale);
         ctx.fillStyle = '#475569';
         if (tr.tipo === 'reta') {
             ctx.fillRect(startX - pL - mL, groundY - pH, mL, 0.3*scale);
