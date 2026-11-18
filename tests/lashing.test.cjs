@@ -5,57 +5,138 @@ const vm = require('node:vm');
 
 const source = fs.readFileSync(require('node:path').join(__dirname, '..', 'app.js'), 'utf8');
 const start = source.indexOf('const lashingEquipment =');
-const end = source.indexOf('function lashingFromForm()', start);
-assert.ok(start >= 0 && end > start, 'Motor de amarração não encontrado');
-const context = vm.createContext({ document: { getElementById: () => ({}) } });
-vm.runInContext(source.slice(start, end), context);
-const { defaultLashing, lashingEstimate, validLashing, unsupportedLashingLoad } = vm.runInContext(
-    '({ defaultLashing, lashingEstimate, validLashing, unsupportedLashingLoad })', context
-);
+const end = source.indexOf('function renderListaCargas()', start);
+assert.ok(start >= 0 && end > start);
 
-test('estima o deslizamento frontal para madeira e borracha', () => {
-    const plan = defaultLashing();
-    assert.equal(lashingEstimate({ peso: 10, larg: 2 }, plan).recommended, 47);
-    assert.equal(lashingEstimate({ peso: 10, larg: 2 }, {
-        ...plan, surface: 'rubber', stf: 600, alpha: 80
-    }).recommended, 7);
-});
-
-test('não estima quantidade para amarração direta nem crédito para calço sem capacidade', () => {
-    const plan = defaultLashing();
-    const direct = lashingEstimate({ peso: 12, larg: 2 }, { ...plan, method: 'direct' });
-    assert.equal(direct.recommended, null);
-    assert.equal(direct.directions[0].restraint, null);
-    const unverified = lashingEstimate({ peso: 10, larg: 2 }, {
-        ...plan, front: true, frontCapacity: null
+function setup() {
+    const elements = new Map();
+    const createElement = () => ({
+        value: '', textContent: '', listeners: {}, options: [], children: [],
+        classList: { toggle() {} },
+        addEventListener(event, callback) { this.listeners[event] = callback; },
+        replaceChildren() { this.options = []; this.children = []; this.value = ''; },
+        appendChild(child) {
+            this.children.push(child);
+            this.options.push(child);
+            if (this.options.length === 1) this.value = child.value;
+        }
     });
-    assert.equal(unverified.directions[0].block, 0);
-    assert.equal(unverified.recommended, 47);
+    const element = id => {
+        if (!elements.has(id)) elements.set(id, createElement());
+        return elements.get(id);
+    };
+    const context = vm.createContext({
+        document: { getElementById: element, createElement },
+        composicaoCargas: [],
+        getCargoLabel: () => 'Carga',
+        analyzeAndDraw() {}
+    });
+    vm.runInContext(source.slice(start, end), context);
+    return { context, element };
+}
+
+const legacy = {
+    equipment: 'chain10', method: 'direct', surface: 'wood', stf: null, lc: 6300,
+    alpha: 75, k: 1.5, count: 3, cg: null, front: false, frontCapacity: null,
+    side: false, sideCapacity: null
+};
+
+test('valida o novo formato e continua aceitando dados antigos', () => {
+    const { context } = setup();
+    const plan = context.defaultLashing();
+    assert.ok(context.validLashing(plan));
+    for (const change of [
+        { count: 0 }, { count: 101 }, { count: 1.5 }, { arrangement: '' },
+        { equipment: 'chain8' }, { version: 1 }
+    ]) assert.ok(!context.validLashing({ ...plan, ...change }));
+    assert.ok(context.validLegacyLashing(legacy));
+    assert.ok(!context.validLegacyLashing({ ...legacy, count: -1 }));
+    assert.ok(context.validLashing(JSON.parse(JSON.stringify(plan))));
 });
 
-test('apresenta momentos somente com centro de gravidade informado', () => {
-    const plan = defaultLashing();
-    const cargo = { peso: 8, larg: 1.2 };
-    assert.equal(lashingEstimate(cargo, plan).tipping, null);
-    const { tipping } = lashingEstimate(cargo, { ...plan, cg: 1.8 });
-    assert.ok(Math.abs(tipping.overturning - 9323.424) < 0.001);
-    assert.ok(Math.abs(tipping.stabilizing - 4708.8) < 0.001);
+test('prévia não altera a carga; salvar, trocar seleção e remover são explícitos', () => {
+    const { context, element } = setup();
+    const first = { type: 'caixa', qtd: 1 };
+    const second = { type: 'caixa', qtd: 1 };
+    context.composicaoCargas.push(first, second);
+    context.refreshLashingItems();
+    element('lashing_equipment').value = 'steel_cable';
+    element('lashing_arrangement').value = 'crossed';
+    element('lashing_count').value = '3';
+    element('lashing_count').listeners.input();
+    assert.equal(first.lashing, undefined);
+    assert.equal(context.displayedLashing(first).count, 3);
+    context.renderLashingAnalysis({ loads: [{ carga: { ...first }, originalCarga: first }] });
+    assert.match(element('lashing_analysis').children[1].children[0].textContent, /prévia não salva/);
+    element('lashing_item').value = '1';
+    element('lashing_item').listeners.change();
+    assert.equal(context.displayedLashing(first), null);
+    element('lashing_form').listeners.submit({ preventDefault() {} });
+    assert.equal(second.lashing.arrangement, 'transverse');
+    element('lashing_remove').listeners.click();
+    assert.equal(second.lashing, undefined);
 });
 
-test('rejeita parâmetros de amarração inválidos', () => {
-    const plan = defaultLashing();
-    assert.equal(validLashing(plan), true);
-    assert.equal(validLashing({ ...plan, stf: 0 }), false);
-    assert.equal(validLashing({ ...plan, alpha: 0 }), false);
-    assert.equal(validLashing({ ...plan, count: 1.5 }), false);
-    assert.equal(validLashing({ ...plan, frontCapacity: -1 }), false);
-    assert.equal(validLashing({ ...plan, stf: null }), false);
-    assert.equal(validLashing({ ...plan, method: 'direct', stf: null }), true);
+test('plano antigo fica intacto até salvar um arranjo escolhido', () => {
+    const { context, element } = setup();
+    const cargo = { type: 'caixa', qtd: 1, lashing: { ...legacy } };
+    context.composicaoCargas.push(cargo);
+    context.refreshLashingItems();
+    assert.equal(element('lashing_equipment').value, 'chain_grade_8');
+    assert.equal(element('lashing_arrangement').value, '');
+    assert.equal(context.displayedLashing(cargo), null);
+    element('lashing_form').listeners.submit({ preventDefault() {} });
+    assert.equal(cargo.lashing.method, 'direct');
+    element('lashing_arrangement').value = 'crossed';
+    element('lashing_arrangement').listeners.input();
+    assert.equal(cargo.lashing.method, 'direct');
+    element('lashing_form').listeners.submit({ preventDefault() {} });
+    assert.equal(cargo.lashing.arrangement, 'crossed');
+    assert.equal(cargo.lashing.count, 3);
+    assert.equal(cargo.lashing.method, undefined);
 });
 
-test('não oferece estimativa para empilhamento ou conjunto de bobinas', () => {
-    assert.equal(unsupportedLashingLoad({ qtd: 2, camadas: 2 }), true);
-    assert.equal(unsupportedLashingLoad({ qtd: 1, camadas: 1, colocarSobreAnterior: true }), true);
-    assert.equal(unsupportedLashingLoad({ type: 'bobina_lado_2', qtd: 1, camadas: 1 }), true);
-    assert.equal(unsupportedLashingLoad({ qtd: 2, camadas: 1 }), false);
+test('diagonais formam pares em X e longitudinal percorre frente e traseira', () => {
+    const { context } = setup();
+    const points = (arrangement, count, i) => context.illustrativeLashingPoints(
+        { arrangement, count }, i, 2, 4, 1, -1, [-1.5, 1.5], 0.1
+    );
+    const a = points('crossed', 3, 0);
+    const b = points('crossed', 3, 1);
+    const c = points('crossed', 3, 2);
+    assert.equal(a[1][2], b[2][2]);
+    assert.equal(a[2][2], b[1][2]);
+    assert.ok(c[1][2] > a[1][2]);
+    const longitudinal = points('longitudinal', 2, 0);
+    assert.equal(longitudinal[0][0], longitudinal[3][0]);
+    assert.ok(longitudinal[0][2] < 0 && longitudinal[3][2] > 0);
+});
+
+test('amarração acompanha a curvatura das bobinas e do vaso nos dois eixos', () => {
+    const { context } = setup();
+    const points = (type, arrangement, index = 0, split = false) => context.cylindricalLashingPoints(
+        { type }, { arrangement, count: 2 }, index, 3, 3, 3, 1, -1.5, [-1.6, 1.6], 0.05, split
+    );
+    for (const type of ['bobina_frente_1', 'vaso']) {
+        const transverse = points(type, 'transverse');
+        const crossed = points(type, 'crossed');
+        const otherDiagonal = points(type, 'crossed', 1);
+        assert.ok(transverse[17][1] > transverse[1][1]);
+        assert.ok(crossed[17][1] > crossed[1][1]);
+        assert.ok(crossed[1][2] < crossed[33][2]);
+        assert.ok(otherDiagonal[1][2] > otherDiagonal[33][2]);
+        const longitudinal = points(type, 'longitudinal');
+        assert.ok(longitudinal[1][2] < longitudinal[33][2]);
+        assert.ok(longitudinal[17][1] < 1.5);
+    }
+    const sideLongitudinal = points('bobina_lado_1', 'longitudinal');
+    const sideCrossed = points('bobina_lado_1', 'crossed');
+    assert.ok(sideLongitudinal[17][1] > sideLongitudinal[1][1]);
+    assert.ok(sideCrossed[17][1] > sideCrossed[1][1]);
+    assert.ok(sideCrossed[1][0] < sideCrossed[33][0]);
+    const pair = points('bobina_frente_2', 'transverse', 1);
+    const split = points('bobina_frente_2', 'transverse', 1, true);
+    assert.ok(pair[17][2] > 0);
+    assert.ok(Math.abs(split[17][2]) < 1);
+    assert.equal(points('caixa', 'crossed'), null);
 });

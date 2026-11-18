@@ -1907,31 +1907,37 @@ function getLoadSequenceMetrics(tr, isCarreta) {
 }
 
 const lashingEquipment = {
-    strap5: { stf: 400, lc: 2500 },
-    strap10: { stf: 600, lc: 5000 },
-    chain8: { stf: null, lc: 4000 },
-    chain10: { stf: null, lc: 6300 },
-    chain13: { stf: null, lc: 10000 }
+    polyester_strap: 'Cinta de Poliéster',
+    chain_grade_8: 'Corrente Grau 8',
+    steel_cable: 'Cabo de Aço'
 };
-const lashingFriction = { wood: 0.25, steel: 0.20, rubber: 0.55 };
+const lashingArrangements = {
+    transverse: 'Transversal / Direto',
+    crossed: 'Diagonal / Cruzado em X',
+    longitudinal: 'Longitudinal / Amadrinhado'
+};
 const lashingFields = Object.fromEntries([
-    'item', 'equipment', 'method', 'surface', 'stf', 'lc', 'alpha', 'k', 'count',
-    'cg', 'front', 'front_capacity', 'side', 'side_capacity'
+    'item', 'equipment', 'count', 'arrangement'
 ].map(name => [name, document.getElementById(`lashing_${name}`)]));
 const lashingMessage = document.getElementById('lashing_form_message');
 const lashingAnalysis = document.getElementById('lashing_analysis');
+let lashingPreview = null;
 
 function defaultLashing() {
-    return {
-        equipment: 'strap5', method: 'top', surface: 'wood', stf: 400, lc: 2500,
-        alpha: 75, k: 1.5, count: 2, cg: null,
-        front: false, frontCapacity: null, side: false, sideCapacity: null
-    };
+    return { version: 2, equipment: 'polyester_strap', count: 2, arrangement: 'transverse' };
 }
 
 function validLashing(plan) {
-    return plan && Object.prototype.hasOwnProperty.call(lashingEquipment, plan.equipment) &&
-        ['top', 'direct'].includes(plan.method) && Object.prototype.hasOwnProperty.call(lashingFriction, plan.surface) &&
+    return plan && plan.version === 2 &&
+        Object.prototype.hasOwnProperty.call(lashingEquipment, plan.equipment) &&
+        Object.prototype.hasOwnProperty.call(lashingArrangements, plan.arrangement) &&
+        Number.isInteger(plan.count) && plan.count >= 1 && plan.count <= 100;
+}
+
+function validLegacyLashing(plan) {
+    return plan && plan.version === undefined &&
+        ['strap5', 'strap10', 'chain8', 'chain10', 'chain13'].includes(plan.equipment) &&
+        ['top', 'direct'].includes(plan.method) && ['wood', 'steel', 'rubber'].includes(plan.surface) &&
         (plan.method === 'direct' && plan.stf === null || Number.isFinite(plan.stf) && plan.stf > 0) &&
         Number.isFinite(plan.lc) && plan.lc > 0 &&
         Number.isFinite(plan.alpha) && plan.alpha > 0 && plan.alpha <= 90 &&
@@ -1941,63 +1947,138 @@ function validLashing(plan) {
         [plan.frontCapacity, plan.sideCapacity].every(value => value === null || (Number.isFinite(value) && value >= 0));
 }
 
-function lashingEstimate(carga, plan) {
-    const weight = carga.peso * 981;
-    const mu = lashingFriction[plan.surface];
-    const friction = mu * weight;
-    const perStrap = plan.method === 'top'
-        ? plan.k * mu * plan.stf * Math.sin(plan.alpha * Math.PI / 180)
-        : null;
-    const directions = [
-        { name: 'Frontal', coefficient: 0.8, factor: 1.25, block: plan.front ? plan.frontCapacity : 0 },
-        { name: 'Lateral', coefficient: 0.5, factor: 1.1, block: plan.side ? plan.sideCapacity : 0 },
-        { name: 'Traseiro', coefficient: 0.5, factor: 1.1, block: 0 }
-    ].map(direction => {
-        const force = direction.coefficient * weight;
-        const block = direction.block === null ? 0 : direction.block * 981;
-        const deficit = Math.max(0, force - friction - block);
-        const required = deficit * direction.factor;
-        return { ...direction, force, block, friction, required,
-            restraint: perStrap === null ? null : perStrap * plan.count,
-            straps: perStrap > 0 ? Math.ceil(required / perStrap) : null };
-    });
-    const tipping = plan.cg === null ? null : {
-        overturning: 1.1 * (carga.larg < plan.cg ? 0.6 : 0.5) * weight * plan.cg,
-        stabilizing: weight * carga.larg / 2
-    };
-    return { weight, directions, tipping,
-        recommended: perStrap === null || weight <= 0 ? null : Math.max(2, ...directions.map(row => row.straps)) };
+function illustrativeLashingPoints(plan, index, width, length, top, hookY, anchorX, clearance) {
+    if (plan.arrangement === 'crossed') {
+        const groups = Math.ceil(plan.count / 2);
+        const segment = length * 0.85 / groups;
+        const center = -length * 0.425 + (Math.floor(index / 2) + 0.5) * segment;
+        const direction = index % 2 === 0 ? 1 : -1;
+        const z1 = center - direction * segment * 0.4;
+        const z2 = center + direction * segment * 0.4;
+        return [
+            [anchorX[0], hookY, z1],
+            [-width / 2 - clearance, top, z1],
+            [width / 2 + clearance, top, z2],
+            [anchorX[1], hookY, z2]
+        ];
+    }
+    const x = ((index + 1) / (plan.count + 1) - 0.5) * width * 0.85;
+    const end = length / 2 + clearance;
+    return [[x, hookY, -end], [x, top, -length / 2], [x, top, length / 2], [x, hookY, end]];
 }
 
-function unsupportedLashingLoad(carga) {
-    return carga.colocarSobreAnterior || (carga.camadas > 1 && carga.qtd > 1) ||
-        carga.type === 'bobina_lado_2' || carga.type === 'bobina_frente_2';
+function cylindricalLashingPoints(carga, plan, index, width, height, length, scale, hookY, anchorX, clearance, splitCoils) {
+    const coil = carga.type.startsWith('bobina_');
+    if (!coil && carga.type !== 'vaso') return null;
+
+    const axis = coil && carga.type.includes('_lado_') ? 'x' : 'z';
+    const coilCount = coil && carga.type.endsWith('_2') && !splitCoils ? 2 : 1;
+    const section = length / coilCount;
+    const radius = coil
+        ? Math.max(0.06 * scale, Math.min(height, axis === 'x' ? section : width) * 0.46)
+        : Math.min(width, height) * 0.39;
+    const outer = radius * 1.08 + Math.max(0.045 * scale, radius * 0.055);
+    const centerY = coil ? -height / 2 + height * 0.08 + outer : 0;
+    const axialLength = coil ? (axis === 'x' ? width : section) * 0.78 : length * 0.78;
+    const bodyRadius = coil ? radius * 0.67 + Math.max(0.025 * scale, radius * 0.025) : radius;
+    const flangePosition = axialLength * 0.43;
+    const flangeWidth = Math.max(0.045 * scale, radius * 0.055);
+    const group = plan.arrangement === 'crossed' ? Math.floor(index / 2) : index;
+    const groups = plan.arrangement === 'crossed' ? Math.ceil(plan.count / 2) : plan.count;
+    const coilIndex = group % coilCount;
+    const localIndex = Math.floor(group / coilCount);
+    const localCount = Math.ceil((groups - coilIndex) / coilCount);
+    const centerZ = coilCount === 1 ? 0 : -length / 2 + section * (coilIndex + 0.5);
+    const radiusAt = axial => {
+        const flange = coil ? Math.max(0, 1 - Math.abs(Math.abs(axial) - flangePosition) / (flangeWidth * 2)) : 0;
+        return bodyRadius + (outer - bodyRadius) * flange + clearance;
+    };
+    const steps = 32;
+    const points = [];
+    const alongAxis = (localIndex + 1) / (localCount + 1) - 0.5;
+    const crossed = plan.arrangement === 'crossed';
+    const direction = index % 2 === 0 ? 1 : -1;
+
+    if ((axis === 'z' && plan.arrangement !== 'longitudinal') ||
+        (axis === 'x' && plan.arrangement !== 'transverse')) {
+        const fixed = alongAxis * axialLength * 0.55;
+        const segment = axialLength * 0.7 / localCount;
+        const center = -axialLength * 0.35 + (localIndex + 0.5) * segment;
+        for (let step = 0; step <= steps; step++) {
+            const t = step / steps;
+            const axial = crossed
+                ? (axis === 'z' ? center + direction * (t - 0.5) * segment * 0.8 : (t - 0.5) * axialLength * 0.7)
+                : fixed;
+            const angle = axis === 'x' && crossed && direction < 0 ? Math.PI * t : Math.PI * (1 - t);
+            const r = radiusAt(axial);
+            const radial = Math.cos(angle) * r;
+            const y = centerY + Math.sin(angle) * r;
+            points.push(axis === 'z' ? [radial, y, centerZ + axial] : [axial, y, centerZ + radial]);
+        }
+    } else {
+        const radial = alongAxis * bodyRadius * 1.5;
+        const end = axialLength * 0.46;
+        for (let step = 0; step <= steps; step++) {
+            const axial = -end + 2 * end * step / steps;
+            const r = radiusAt(axial);
+            const y = centerY + Math.sqrt(Math.max(0, r * r - radial * radial));
+            points.push(axis === 'z' ? [radial, y, centerZ + axial] : [axial, y, centerZ + radial]);
+        }
+    }
+
+    const first = points[0];
+    const last = points[points.length - 1];
+    if (plan.arrangement === 'longitudinal') {
+        points.unshift([first[0], hookY, first[2] - clearance]);
+        points.push([last[0], hookY, last[2] + clearance]);
+    } else {
+        points.unshift([anchorX[0], hookY, first[2]]);
+        points.push([anchorX[1], hookY, last[2]]);
+    }
+    return points;
 }
 
 function lashingFromForm() {
-    const optionalNumber = input => input.value === '' ? null : Number(input.value);
     return {
-        equipment: lashingFields.equipment.value, method: lashingFields.method.value,
-        surface: lashingFields.surface.value, stf: optionalNumber(lashingFields.stf),
-        lc: Number(lashingFields.lc.value), alpha: Number(lashingFields.alpha.value),
-        k: Number(lashingFields.k.value), count: Number(lashingFields.count.value),
-        cg: optionalNumber(lashingFields.cg), front: lashingFields.front.checked,
-        frontCapacity: optionalNumber(lashingFields.front_capacity), side: lashingFields.side.checked,
-        sideCapacity: optionalNumber(lashingFields.side_capacity)
+        version: 2, equipment: lashingFields.equipment.value,
+        count: Number(lashingFields.count.value), arrangement: lashingFields.arrangement.value
     };
 }
 
 function showLashingForm() {
-    const carga = composicaoCargas[Number(lashingFields.item.value)];
-    const plan = carga?.lashing || defaultLashing();
-    ['equipment', 'method', 'surface', 'stf', 'lc', 'alpha', 'k', 'count', 'cg'].forEach(name => {
-        lashingFields[name].value = plan[name] ?? '';
-    });
-    lashingFields.front.checked = plan.front;
-    lashingFields.side.checked = plan.side;
-    lashingFields.front_capacity.value = plan.frontCapacity ?? '';
-    lashingFields.side_capacity.value = plan.sideCapacity ?? '';
-    lashingMessage.textContent = carga ? '' : 'Adicione uma carga para configurar a amarração.';
+    lashingPreview = null;
+    const carga = selectedLashingCargo();
+    const saved = carga?.lashing;
+    const legacy = validLegacyLashing(saved);
+    const plan = legacy ? {
+        equipment: saved.equipment.startsWith('chain') ? 'chain_grade_8' : 'polyester_strap',
+        count: saved.count, arrangement: ''
+    } : saved || defaultLashing();
+    ['equipment', 'count', 'arrangement'].forEach(name => { lashingFields[name].value = plan[name]; });
+    lashingMessage.textContent = !carga ? 'Adicione uma carga para configurar a amarração.'
+        : legacy ? 'Amarração antiga preservada. Escolha um arranjo e salve para atualizar; os dados antigos serão substituídos.' : '';
+}
+
+function selectedLashingCargo() {
+    return lashingFields.item.value === '' ? null : composicaoCargas[Number(lashingFields.item.value)];
+}
+
+function displayedLashing(carga) {
+    if (lashingPreview?.carga === carga) return lashingPreview.plan;
+    return validLashing(carga.lashing) ? carga.lashing : null;
+}
+
+function previewLashing() {
+    const carga = selectedLashingCargo();
+    const plan = lashingFromForm();
+    lashingPreview = carga && validLashing(plan) ? { carga, plan } : null;
+    if (carga && validLegacyLashing(carga.lashing) && !plan.arrangement) {
+        lashingMessage.textContent = 'Amarração antiga preservada. Escolha um arranjo e salve para atualizar; os dados antigos serão substituídos.';
+    } else {
+        lashingMessage.textContent = !carga ? 'Adicione uma carga para configurar a amarração.'
+            : lashingPreview ? 'Prévia não salva.' : 'Informe um arranjo e uma quantidade inteira entre 1 e 100 para visualizar a prévia.';
+    }
+    analyzeAndDraw();
 }
 
 function refreshLashingItems() {
@@ -2013,50 +2094,26 @@ function refreshLashingItems() {
     showLashingForm();
 }
 
-lashingFields.item.addEventListener('change', showLashingForm);
-lashingFields.equipment.addEventListener('change', () => {
-    const equipment = lashingEquipment[lashingFields.equipment.value];
-    lashingFields.stf.value = equipment.stf ?? '';
-    lashingFields.lc.value = equipment.lc;
+lashingFields.item.addEventListener('change', () => {
+    showLashingForm();
+    analyzeAndDraw();
 });
-document.getElementById('lashing_calculate').addEventListener('click', () => {
-    const carga = composicaoCargas[Number(lashingFields.item.value)];
-    const plan = lashingFromForm();
-    if (!carga || !validLashing(plan) || carga.peso <= 0 || (plan.cg !== null && plan.cg > carga.alt)) {
-        lashingMessage.textContent = 'Informe peso positivo e todos os dados válidos, inclusive STF e LC da etiqueta.';
-        return;
-    }
-    if (plan.method === 'direct') {
-        lashingMessage.textContent = 'Amarração direta: quantidade indeterminada; confirme geometria e pontos com profissional habilitado.';
-        return;
-    }
-    if (unsupportedLashingLoad(carga)) {
-        lashingMessage.textContent = 'Estimativa indisponível para cargas empilhadas ou conjuntos de bobinas; consulte profissional habilitado.';
-        return;
-    }
-    const result = lashingEstimate(carga, plan);
-    if (result.recommended > 100) {
-        lashingMessage.textContent = `Estimativa acima de 100 amarras (${result.recommended}); reveja o método com profissional habilitado.`;
-        return;
-    }
-    lashingFields.count.value = result.recommended;
-    lashingMessage.textContent = `Estimativa de deslizamento: ${result.recommended} por peça. Não verifica tombamento ou pontos de fixação.` +
-        (result.recommended > 12 ? ' Quantidade elevada: avalie outro método com profissional habilitado.' : '');
-});
+['equipment', 'count', 'arrangement'].forEach(name => lashingFields[name].addEventListener('input', previewLashing));
 document.getElementById('lashing_form').addEventListener('submit', event => {
     event.preventDefault();
-    const carga = composicaoCargas[Number(lashingFields.item.value)];
+    const carga = selectedLashingCargo();
     const plan = lashingFromForm();
-    if (!carga || !validLashing(plan) || (plan.cg !== null && plan.cg > carga.alt)) {
-        lashingMessage.textContent = 'Selecione uma carga e informe dados válidos.';
+    if (!carga || !validLashing(plan)) {
+        lashingMessage.textContent = 'Selecione uma carga, um arranjo e uma quantidade inteira entre 1 e 100.';
         return;
     }
     carga.lashing = plan;
-    lashingMessage.textContent = 'Amarração salva para cada peça deste item.';
+    lashingPreview = null;
+    lashingMessage.textContent = 'Amarração aplicada a cada peça. Para guardar na nuvem, use Salvar planejamento.';
     analyzeAndDraw();
 });
 document.getElementById('lashing_remove').addEventListener('click', () => {
-    const carga = composicaoCargas[Number(lashingFields.item.value)];
+    const carga = selectedLashingCargo();
     if (!carga) return;
     delete carga.lashing;
     showLashingForm();
@@ -2070,55 +2127,20 @@ function renderLashingAnalysis(loadSequence) {
     if (!loadSequence.loads.length) return;
     const title = document.createElement('h3');
     title.className = 'mb-2 font-bold uppercase';
-    title.textContent = 'Amarração — simulação orientativa por peça';
+    title.textContent = 'Amarração ilustrativa por peça';
     lashingAnalysis.appendChild(title);
-    loadSequence.loads.forEach(({ carga }) => {
-        const plan = carga.lashing;
+    loadSequence.loads.forEach(({ carga, originalCarga }) => {
+        const plan = displayedLashing(originalCarga);
         const section = document.createElement('div');
         section.className = 'mb-3 border-t border-amber-300 pt-2';
         const heading = document.createElement('strong');
         heading.textContent = plan
-            ? `${getCargoLabel(carga.type)} — ${plan.count} amarra(s) por peça`
-            : `${getCargoLabel(carga.type)} — sem amarração configurada`;
+            ? `${getCargoLabel(carga.type)} — ${plan.count} peça(s): ${lashingEquipment[plan.equipment]} — ${lashingArrangements[plan.arrangement]}${lashingPreview?.carga === originalCarga ? ' (prévia não salva)' : ''}`
+            : `${getCargoLabel(carga.type)} — ${validLegacyLashing(carga.lashing) ? 'amarração antiga: escolha um arranjo para ilustrar' : 'sem amarração configurada'}`;
         section.appendChild(heading);
-        if (!plan) {
-            const missing = document.createElement('p');
-            missing.textContent = 'Nenhum terminal ou ponto de fixação foi verificado.';
-            section.appendChild(missing);
-            lashingAnalysis.appendChild(section);
-            return;
-        }
-        if (carga.peso <= 0 || unsupportedLashingLoad(carga)) {
-            const missing = document.createElement('p');
-            missing.textContent = carga.peso <= 0
-                ? 'Cálculo indeterminado: informe o peso real da peça. Validação final por profissional habilitado.'
-                : 'Cálculo indeterminado para cargas empilhadas ou conjuntos de bobinas. Validação final por profissional habilitado.';
-            section.appendChild(missing);
-            lashingAnalysis.appendChild(section);
-            return;
-        }
-        const result = lashingEstimate(carga, plan);
-        result.directions.forEach(row => {
-            const line = document.createElement('p');
-            const fmt = value => Math.round(value).toLocaleString('pt-BR');
-            line.textContent = `${row.name}: força ${fmt(row.force)} daN; atrito ${fmt(row.friction)} daN; bloqueio informado ${fmt(row.block)} daN; ` +
-                (row.restraint === null ? 'contenção direta indeterminada.' : `amarração ${fmt(row.restraint)} daN; déficit com fator ${fmt(Math.max(0, row.required - row.restraint))} daN.`);
-            section.appendChild(line);
-        });
-        const tipping = document.createElement('p');
-        tipping.textContent = result.tipping === null
-            ? 'Tombamento: indeterminado; informe a altura real do centro de gravidade.'
-            : `Tombamento: momento residual ${Math.round(Math.max(0, result.tipping.overturning - result.tipping.stabilizing)).toLocaleString('pt-BR')} daN·m, assumindo CG centrado e sem considerar amarras ou escoramentos.`;
-        section.appendChild(tipping);
         const warning = document.createElement('p');
         warning.className = 'mt-1 font-semibold';
-        const terminals = plan.method === 'top' ? plan.count * 2 : plan.count;
-        warning.textContent = `Terminais ilustrados: ${terminals}, não confirmados. ` +
-            'Não verificados: capacidade e direção dos pontos, geometria e ângulos reais, atrito, equipamento, bloqueios, rolamento e estabilidade. O desenho é esquemático. Validação final por profissional habilitado.';
-        if (terminals < 4) warning.textContent += ' Menos de quatro terminais ilustrados: confira o art. 5º da Resolução CONTRAN 945/2022 quando aplicável.';
-        if ((plan.front && plan.frontCapacity === null) || (plan.side && plan.sideCapacity === null)) {
-            warning.textContent += ' Bloqueio sem capacidade informada não foi contabilizado.';
-        }
+        warning.textContent = 'Desenho esquemático: contato, ancoragem e segurança não são verificados. Confirme com profissional habilitado.';
         section.appendChild(warning);
         lashingAnalysis.appendChild(section);
     });
@@ -2163,18 +2185,6 @@ function renderListaCargas() {
         li.append(editButton, removeButton);
         els.listaCargas.appendChild(li);
     });
-}
-
-function canKeepLashingOnEdit(height) {
-    const plan = editingCargaIndex === null ? null : composicaoCargas[editingCargaIndex]?.lashing;
-    if (!plan || plan.cg === null || plan.cg <= height) return true;
-    const panel = document.getElementById('lashing_panel');
-    panel.open = true;
-    lashingFields.item.value = String(editingCargaIndex);
-    showLashingForm();
-    lashingMessage.textContent = 'A altura do centro de gravidade configurada supera a nova altura da carga. Ajuste a amarração antes de salvar a carga.';
-    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    return false;
 }
 
 function atualizarBotaoCarga() {
@@ -2250,7 +2260,6 @@ els.btnAdicionar.addEventListener('click', () => {
     const type = document.getElementById('input_tipo_carga').value;
     const armador = document.getElementById('input_armador').value;
 
-    if (!canKeepLashingOnEdit(alt)) return;
     const cargaAtualizada = { comp, larg, alt, peso, type, armador, qtd, camadas, colocarSobreAnterior };
     if (editingCargaIndex !== null && composicaoCargas[editingCargaIndex].lashing) {
         cargaAtualizada.lashing = composicaoCargas[editingCargaIndex].lashing;
@@ -2270,7 +2279,6 @@ els.btnAdicionar.addEventListener('click', () => {
 generalCargo.form.addEventListener('submit', event => {
     event.preventDefault();
     if (!generalCargo.form.reportValidity() || !generalCargoByType.has(generalCargo.model.value)) return;
-    if (!canKeepLashingOnEdit(Number(generalCargo.alt.value))) return;
     const carga = {
         type: generalCargo.model.value,
         comp: Number(generalCargo.comp.value),
@@ -4512,12 +4520,13 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
         ? { loads: [] }
         : getLoadSequenceMetrics(tr,isCarreta);
 
-    function lashingRibbon(curve, width, material, group) {
+    function lashingRibbon(curve, width, material, group, widthX = 0, widthZ = 1) {
         const points = curve.getPoints(16);
         const vertices = [];
         const indices = [];
         points.forEach((point, index) => {
-            vertices.push(point.x, point.y, point.z - width / 2, point.x, point.y, point.z + width / 2);
+            vertices.push(point.x - widthX * width / 2, point.y, point.z - widthZ * width / 2,
+                point.x + widthX * width / 2, point.y, point.z + widthZ * width / 2);
             if (index) {
                 const a = (index - 1) * 2;
                 indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
@@ -4530,16 +4539,16 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
         return mesh(geometry, material, 0, 0, 0, group);
     }
 
-    function drawLoadLashing(carga, x, y, z, width, height, length, deckHeight) {
-        const plan = carga.lashing;
+    function drawLoadLashing(carga, x, y, z, width, height, length, deckHeight, plan, splitCoils) {
         if (!plan) return;
         const group = new THREE.Group();
         group.position.set(x, y, z);
         group.name = 'amarração ilustrativa';
         trailerGroup.add(group);
-        const chain = plan.equipment.startsWith('chain');
-        const material = mat(chain ? 0x505b61 : plan.equipment === 'strap10' ? 0x1956b8 : 0xe59a13, 0.55, chain ? 0.75 : 0.1);
-        if (!chain) material.side = THREE.DoubleSide;
+        const chain = plan.equipment === 'chain_grade_8';
+        const cable = plan.equipment === 'steel_cable';
+        const material = mat(chain ? 0x505b61 : cable ? 0xa2adb3 : 0xe59a13, 0.55, chain || cable ? 0.75 : 0.1);
+        if (!chain && !cable) material.side = THREE.DoubleSide;
         const metal = mat(0x89949a, 0.35, 0.8);
         const radius = (chain ? 0.018 : 0.025) * S;
         const hookY = deckHeight - y - 0.02 * S;
@@ -4550,36 +4559,14 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
         const corner = radius * 2;
 
         for (let i = 0; i < plan.count; i++) {
-            const isSingleCoil = carga.type === 'bobina_frente_1';
-            const along = ((i + 1) / (plan.count + 1) - 0.5) * length * (isSingleCoil ? 0.57 : 0.85);
+            const along = ((i + 1) / (plan.count + 1) - 0.5) * length * 0.85;
             const curve = new THREE.CurvePath();
             const point = (px, py, pz = along) => new THREE.Vector3(px, py, pz);
-            const coilRadius = Math.min(height, width) * 0.46;
-            const coilOuter = coilRadius * 1.08 + Math.max(0.045 * S, coilRadius * 0.055);
-            const isRound = isSingleCoil || carga.type === 'vaso';
-            const roundRadius = carga.type === 'vaso' ? Math.min(width, height) * 0.39 : coilRadius * 0.695;
-            const roundY = carga.type === 'vaso' ? 0 : bottom + height * 0.08 + coilOuter;
-            const clearanceRadius = roundRadius + radius * 2;
-            const leftDistance = Math.hypot(anchorX[0], hookY - roundY);
-            const rightDistance = Math.hypot(anchorX[1], hookY - roundY);
-            if (plan.method === 'top' && isRound && leftDistance > clearanceRadius && rightDistance > clearanceRadius) {
-                const leftAngle = Math.atan2(hookY - roundY, anchorX[0]) - Math.acos(clearanceRadius / leftDistance);
-                const rightAngle = Math.atan2(hookY - roundY, anchorX[1]) + Math.acos(clearanceRadius / rightDistance);
-                let startAngle = (leftAngle + Math.PI * 2) % (Math.PI * 2);
-                let endAngle = (rightAngle + Math.PI * 2) % (Math.PI * 2);
-                if (startAngle < endAngle) startAngle += Math.PI * 2;
-                const steps = 32;
-                const arcRadius = clearanceRadius / Math.cos((startAngle - endAngle) / (steps * 2));
-                const arcPoint = angle => point(Math.cos(angle) * arcRadius, roundY + Math.sin(angle) * arcRadius);
-                let previous = arcPoint(startAngle);
-                curve.add(new THREE.LineCurve3(point(anchorX[0], hookY), previous));
-                for (let step = 1; step <= steps; step++) {
-                    const next = arcPoint(startAngle + (endAngle - startAngle) * step / steps);
-                    curve.add(new THREE.LineCurve3(previous, next));
-                    previous = next;
-                }
-                curve.add(new THREE.LineCurve3(previous, point(anchorX[1], hookY)));
-            } else if (plan.method === 'top') {
+            const cylindrical = cylindricalLashingPoints(carga, plan, i, width, height, length, S, hookY, anchorX, corner, splitCoils);
+            if (cylindrical) {
+                const points = cylindrical.map(coords => new THREE.Vector3(...coords));
+                for (let j = 1; j < points.length; j++) curve.add(new THREE.LineCurve3(points[j - 1], points[j]));
+            } else if (plan.arrangement === 'transverse') {
                 const leftAnchor = point(anchorX[0], hookY);
                 const leftBase = point(-halfWidth, bottom);
                 const leftSide = point(-halfWidth, top - corner);
@@ -4596,15 +4583,14 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
                 curve.add(new THREE.LineCurve3(rightSide, rightBase));
                 curve.add(new THREE.LineCurve3(rightBase, rightAnchor));
             } else {
-                const side = i % 2 === 0 ? -1 : 1;
-                const end = i % 4 < 2 ? -1 : 1;
-                curve.add(new THREE.LineCurve3(
-                    point(side < 0 ? anchorX[0] : anchorX[1], hookY, along + end * length * 0.08),
-                    point(side * halfWidth, bottom + height * 0.2, along)
-                ));
+                const points = illustrativeLashingPoints(plan, i, width, length, top, hookY, anchorX, corner)
+                    .map(coords => new THREE.Vector3(...coords));
+                for (let j = 1; j < points.length; j++) curve.add(new THREE.LineCurve3(points[j - 1], points[j]));
+            }
+            if (chain || cable) {
+                mesh(new THREE.TubeGeometry(curve, 64, radius, 8, false), material, 0, 0, 0, group);
             }
             if (chain) {
-                mesh(new THREE.TubeGeometry(curve, 64, radius, 8, false), material, 0, 0, 0, group);
                 const linkCount = Math.min(256, Math.max(2, Math.ceil(curve.getLength() / (0.10 * S))));
                 const links = new THREE.InstancedMesh(new THREE.TorusGeometry(radius * 1.6, radius * 0.35, 5, 10), metal, linkCount);
                 const link = new THREE.Object3D();
@@ -4620,26 +4606,23 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
                 links.instanceMatrix.needsUpdate = true;
                 links.castShadow = true;
                 group.add(links);
-            } else {
-                const strapWidth = (plan.equipment === 'strap10' ? 0.085 : 0.05) * S;
-                lashingRibbon(curve, strapWidth, material, group);
+            } else if (!cable) {
+                const start = curve.getPoint(0);
+                const end = curve.getPoint(1);
+                const dx = end.x - start.x;
+                const dz = end.z - start.z;
+                const horizontal = Math.hypot(dx, dz) || 1;
+                lashingRibbon(curve, 0.05 * S, material, group, dz / horizontal, -dx / horizontal);
             }
-            const sides = plan.method === 'top' ? [-1, 1] : [i % 2 === 0 ? -1 : 1];
-            sides.forEach(side => {
-                const hx = side < 0 ? anchorX[0] : anchorX[1];
-                const hookZ = plan.method === 'top' ? along : along + (i % 4 < 2 ? -1 : 1) * length * 0.08;
-                box(radius * 4, radius * 3, radius * 6, metal, hx, hookY, hookZ, group);
-                box(radius * 5, radius * 3, radius * 9, metal, hx, hookY + radius * 8, hookZ, group);
+            [curve.getPoint(0), curve.getPoint(1)].forEach(hook => {
+                box(radius * 4, radius * 3, radius * 6, metal, hook.x, hook.y, hook.z, group);
+                box(radius * 5, radius * 3, radius * 9, metal, hook.x, hook.y + radius * 8, hook.z, group);
             });
-        }
-        const chock = mat(0x895d36, 0.85, 0.1);
-        if (plan.front) box(width * 0.65, 0.12 * S, 0.15 * S, chock, 0, bottom + 0.06 * S, length / 2, group);
-        if (plan.side) {
-            [-1, 1].forEach(side => box(0.15 * S, 0.12 * S, length * 0.35, chock, side * width / 2, bottom + 0.06 * S, 0, group));
         }
     }
 
-    loadSequence.loads.forEach(({ carga, grid, startOffset, mesaStartOffset, eixoStartOffset, splitCoils, stackBaseHeight }) => {
+    loadSequence.loads.forEach(({ carga, originalCarga, grid, startOffset, mesaStartOffset, eixoStartOffset, splitCoils, stackBaseHeight }) => {
+        const lashing = displayedLashing(originalCarga);
         const cW = Math.max(.1, carga.larg) * S;
         const cH = Math.max(.1, carga.alt) * S;
         const cL = Math.max(.1, carga.comp) * S;
@@ -5358,12 +5341,12 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
                     const eixoItem=baseItem.clone();
                     eixoItem.position.set(itemX,eixoY+layer*cH,eixoFrontZ-coilLength/2-rowOffset);
                     loadGroup.add(eixoItem);
-                    drawLoadLashing(carga, eixoItem.position.x, eixoItem.position.y, eixoItem.position.z, cW, cH, coilLength, eixoDeckY);
+                    drawLoadLashing(carga, eixoItem.position.x, eixoItem.position.y, eixoItem.position.z, cW, cH, coilLength, eixoDeckY, lashing, true);
 
                     const mesaItem=baseItem.clone();
                     mesaItem.position.set(itemX,mesaY+layer*cH,mesaFrontZ-coilLength/2-rowOffset);
                     loadGroup.add(mesaItem);
-                    drawLoadLashing(carga, mesaItem.position.x, mesaItem.position.y, mesaItem.position.z, cW, cH, coilLength, tr.tipo==='reta'?pH:hT);
+                    drawLoadLashing(carga, mesaItem.position.x, mesaItem.position.y, mesaItem.position.z, cW, cH, coilLength, tr.tipo==='reta'?pH:hT, lashing, true);
                 }
             }
         } else {
@@ -5380,7 +5363,7 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
                     const inst = baseItem.clone();
                     inst.position.set(itemX, loadY + layer * cH, itemZ);
                     loadGroup.add(inst);
-                    drawLoadLashing(carga, inst.position.x, inst.position.y, inst.position.z, cW, cH, cL, loadY - cH/2 - stackBaseHeight*S);
+                    drawLoadLashing(carga, inst.position.x, inst.position.y, inst.position.z, cW, cH, cL, loadY - cH/2 - stackBaseHeight*S, lashing, false);
                     if (generalCargoByType.has(carga.type)) generalInstances.push(inst);
                 }
             }
@@ -6398,8 +6381,7 @@ function validatePlanState(state) {
         Number.isInteger(item.qtd) && item.qtd > 0 &&
         (item.camadas === undefined || (Number.isInteger(item.camadas) && item.camadas > 0)) &&
         (item.colocarSobreAnterior === undefined || typeof item.colocarSobreAnterior === 'boolean') &&
-        (item.lashing === undefined || (validLashing(item.lashing) &&
-            (item.lashing.cg === null || item.lashing.cg <= item.alt)))
+        (item.lashing === undefined || validLashing(item.lashing) || validLegacyLashing(item.lashing))
     );
     if (!validItems) throw new Error('Este planejamento contém cargas inválidas.');
 }
