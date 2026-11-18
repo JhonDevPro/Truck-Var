@@ -27,7 +27,9 @@ const vehicleModels = [
     ['caminhões/F350-chevrolet.glb', 'modelos/vuc-chevrolet.glb.gz'],
     ['caminhões/F350-honda_acty.glb', 'modelos/vuc-honda.glb.gz'],
     ['caminhões/F350-mercedes-benz.glb', 'modelos/vuc-mercedes.glb.gz'],
-    ['caminhões/saveiro.glb', 'modelos/saveiro.glb.gz']
+    ['caminhões/saveiro.glb', 'modelos/saveiro.glb.gz'],
+    ['motoristas/motorista.glb', 'modelos/motorista.glb.gz'],
+    ['motoristas/motorista-2.glb', 'modelos/motorista-2.glb.gz']
 ];
 const files = androidShell ? sharedFiles : [...sharedFiles, ...modelFiles];
 
@@ -45,6 +47,7 @@ if (androidShell) {
     await rm(resolve(output, 'modelos'), { recursive: true, force: true });
     await rm(resolve(output, 'cargas'), { recursive: true, force: true });
     await rm(resolve(output, 'caminhões'), { recursive: true, force: true });
+    await rm(resolve(output, 'motoristas'), { recursive: true, force: true });
 } else {
     const scaniaModel = await readFile(resolve(root, 'scania_S-730.glb'));
     await writeFile(
@@ -60,6 +63,7 @@ if (androidShell) {
     await cp(resolve(root, 'cargas'), resolve(output, 'cargas'), { recursive: true });
     await mkdir(resolve(output, 'modelos'), { recursive: true });
     await mkdir(resolve(output, 'caminhões'), { recursive: true });
+    await mkdir(resolve(output, 'motoristas'), { recursive: true });
     for (const [source, target] of vehicleModels) {
         const model = await readFile(resolve(root, source));
         await writeFile(resolve(output, target), gzipSync(model, { level: 9 }));

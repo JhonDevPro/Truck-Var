@@ -53,7 +53,7 @@ const CAB_MODELS = {
         scale: 1.2, 
         rotationY: 0, 
         offsetY: 1,
-        fifthWheel: { z: 1.68, y: 1.28 }
+        fifthWheel: { z: 1.68, y: 1.28 },
     },
     fortnite_semi_truck: { 
         format: 'gltf', 
@@ -61,7 +61,8 @@ const CAB_MODELS = {
         scale: 1.2, 
         rotationY: Math.PI, 
         offsetY: 1,
-        fifthWheel: { z: 1.47, y: 1.27 }
+        fifthWheel: { z: 1.47, y: 1.27 },
+        driver: { x: 0.4, y: 1.75, z: 3.9, wheel: { y: 2.12, z: 3.5, tilt: 35, radius: 0.22 } },
     },
     semi_truck_burnout_revenge: { 
         format: 'gltf', 
@@ -69,7 +70,8 @@ const CAB_MODELS = {
         scale: 1.0, 
         rotationY: 0, 
         offsetY: 0,
-        fifthWheel: { z: 2.08, y: 1.11 }
+        fifthWheel: { z: 2.08, y: 1.11 },
+        driver: { x: 0.47, y: 1.9, z: 1.3, wheel: { y: 2.02, z: 0.9, tilt: 35, radius: 0.22 } },
     },
     scania_s_730: {
         format: 'gltf',
@@ -80,6 +82,7 @@ const CAB_MODELS = {
         alignToGround: true,
         offsetZ: -2.6,
         fifthWheel: { z: 0.96, y: 1.04 },
+        driver: { x: 0.6, y: 2.0, z: 1.3, wheel: { y: 2.15, z: 0.8, tilt: 35, radius: 0.22 } },
         bodyColor: 0xf2f2f0,
         grayMeshNames: ['Object_56', 'Object_83', 'Object_125'],
         whiteMeshNames: ['Object_30', 'Object_58'],
@@ -104,6 +107,7 @@ const RIGID_VEHICLE_MODELS = {
         wheels: { z: [3.49, -3.75, -5.15], radius: 0.585, innerX: 0.6 },
         animationWheels: { z: [1.92, -5.32, -6.72], y: 0.58, radius: 0.585, minX: 0.6, maxCenterOffset: 0.6, materials: /^(Tyre_rubber|Ascot_aluminium|Ascot_rubber__chassis)$/, hiddenMeshes: /^Object_(128|130|132)$/ },
         cabLight: { x: 0, y: 3.1, z: 1.9 },
+        driver: { x: 0.68, y: 2.25, z: 1.4, wheel: { y: 2.35, z: 1.05, tilt: 35, radius: 0.22 } },
         ivecoLogo: true,
         paints: [
             { match: /ruby_red/i, color: VEHICLE_BODY_WHITE },
@@ -122,6 +126,7 @@ const RIGID_VEHICLE_MODELS = {
         wheels: { z: [3.07, -1.47], radius: 0.515, innerX: 0.55 },
         animationWheels: { z: [1.09, -3.45], y: 0.51, radius: 0.515, minX: 0.5, maxCenterOffset: 0.6, materials: /^(Tyre_rubber|Ascot_aluminium|Ascot_rubber__chassis)$/, hiddenMeshes: /^Object_(84|86)$/ },
         cabLight: { x: 0, y: 2.65, z: 1.3 },
+        driver: { x: 0.61, y: 2.2, z: 1.4, wheel: { y: 2.35, z: 1.05, tilt: 35, radius: 0.22 } },
         ivecoLogo: true,
         paints: [
             { match: /ruby_red/i, color: VEHICLE_BODY_WHITE },
@@ -140,6 +145,7 @@ const RIGID_VEHICLE_MODELS = {
         wheels: { z: [2.35, -2.74], radius: 0.48, innerX: 0.85 },
         animationWheels: { z: [0.93, -4.21], y: 0.5, radius: 0.5, minX: 0.5, materials: /^jumbo-car$/, componentCounts: [81, 257] },
         cabLight: { x: 0, y: 2.2, z: 0.94 },
+        driver: { x: 0.4, y: 1.1, z: 1.0, wheel: { y: 1.45, z: 0.65, tilt: 35, radius: 0.2 } },
         brighten: true,
         paints: []
     },
@@ -154,6 +160,7 @@ const RIGID_VEHICLE_MODELS = {
         wheels: { z: [0.54, -1.34], radius: 0.25, innerX: 0.5 },
         animationWheels: { z: [0.54, -1.34], y: 0.25, radius: 0.25, minX: 0.5, meshes: /^WHEEL_/ },
         cabLight: { x: 0, y: 1.3, z: 0.53 },
+        driver: { x: -0.48, y: 1.4, z: 1.45, wheel: { y: 1.65, z: 0.85, tilt: 35, radius: 0.18 } },
         brighten: true,
         glassMaterial: /^windscreen\.2$/,
         paints: []
@@ -169,6 +176,7 @@ const RIGID_VEHICLE_MODELS = {
         wheels: { z: [4.80, 1.40], radius: 0.40, innerX: 0.8 },
         animationWheels: { z: [1.30, -2.08], y: 0.35, radius: 0.35, minX: 0.5, materials: /^Color_00[48]$/ },
         cabLight: { x: 0, y: 1.65, z: 0.71 },
+        driver: { x: 0.35, y: 1.0, z: 1.65, wheel: { y: 1.35, z: 1.2, tilt: 35, radius: 0.2 } },
         paints: [
             { match: /OrangeRed/i, color: VEHICLE_BODY_WHITE }
         ]
@@ -183,6 +191,7 @@ const RIGID_VEHICLE_MODELS = {
         wheels: { z: [1.53, -0.48], radius: 0.26, innerX: 0.38, scale: 1.1, offsetY: 0.033 },
         animationWheels: { z: [1.53, -0.48], y: 0.23, radius: 0.26, minX: 0.38, meshes: /^Tire_/ },
         cabLight: { x: 0, y: 0.98, z: 0.43 },
+        driver: { x: -0.23, y: 0.8, z: 1.75, scale: 0.72, minY: 0.65, wheel: { y: 0.97, z: 1.25, tilt: 30, radius: 0.18 } },
         paints: [
             { match: /BODYPAINT/i, color: VEHICLE_BODY_WHITE, metalness: 0.05, roughness: 0.68 },
             { match: /^METAL$/i, color: VEHICLE_DETAIL_GRAY }
@@ -816,10 +825,16 @@ function loadCabModel(modelId) {
     return cabModelPromises.get(modelId);
 }
 
+const glbClips = new WeakMap();
+
 function loadCompressedGlb(compressedUrl, uncompressedUrl) {
     const loader = new THREE.GLTFLoader();
+    const sceneWithClips = gltf => {
+        if (gltf.animations.length) glbClips.set(gltf.scene, gltf.animations);
+        return gltf.scene;
+    };
     const loadUncompressed = () => new Promise((resolve, reject) => {
-        loader.load(uncompressedUrl, gltf => resolve(gltf.scene), undefined, reject);
+        loader.load(uncompressedUrl, gltf => resolve(sceneWithClips(gltf)), undefined, reject);
     });
 
     if (window.location.protocol === 'file:' || typeof DecompressionStream !== 'function') {
@@ -838,7 +853,7 @@ function loadCompressedGlb(compressedUrl, uncompressedUrl) {
                 .arrayBuffer();
         })
         .then(data => new Promise((resolve, reject) => {
-            loader.parse(data, './', gltf => resolve(gltf.scene), reject);
+            loader.parse(data, './', gltf => resolve(sceneWithClips(gltf)), reject);
         }))
         .catch(error => {
             console.warn(`Falha ao carregar ${compressedUrl}; tentando o modelo original.`, error);
@@ -877,19 +892,219 @@ function loadIvecoLogoImage() {
     return ivecoLogoImagePromise;
 }
 
+// Motorista: o modelo sentado (rig Mixamo) tem os braços ajustados ao volante de cada
+// veículo e é convertido em malhas estáticas, que podem ser clonadas junto com a cabine.
+const DRIVER_MODEL = { height: 1.72, poseTime: 1 };
+const DRIVER_MODELS = {
+    motorista_1: { url: './motoristas/motorista.glb', compressedUrl: './modelos/motorista.glb.gz' },
+    motorista_2: { url: './motoristas/motorista-2.glb', compressedUrl: './modelos/motorista-2.glb.gz' }
+};
+const driverRigPromises = new Map();
+const driverBakes = new Map();
+
+function getSelectedDriverId() {
+    const id = document.getElementById('input_motorista')?.value;
+    return DRIVER_MODELS[id] ? id : null;
+}
+
+function loadDriverRig(driverId = getSelectedDriverId()) {
+    if (!driverId) return Promise.resolve(null);
+    if (!driverRigPromises.has(driverId)) {
+        const model = DRIVER_MODELS[driverId];
+        const promise = loadCompressedGlb(model.compressedUrl, model.url)
+            .then(source => ({ ...prepareDriverRig(source), id: driverId }))
+            .catch(error => {
+                console.warn('Não foi possível carregar o motorista; o veículo será exibido sem ele.', error);
+                return null;
+            });
+        driverRigPromises.set(driverId, promise);
+    }
+    return driverRigPromises.get(driverId);
+}
+
+function prepareDriverRig(source) {
+    const clip = glbClips.get(source)?.[0];
+    const skinned = [];
+    const bones = {};
+    source.updateMatrixWorld(true);
+    source.traverse(node => {
+        if (node.isSkinnedMesh) skinned.push(node);
+        const name = node.isBone && /^mixamorig\d*:?(.+?)_\d+$/.exec(node.name);
+        if (name) bones[name[1]] = node;
+    });
+    const required = ['Hips', 'LeftArm', 'LeftForeArm', 'LeftHand', 'RightArm', 'RightForeArm', 'RightHand'];
+    if (!clip || !skinned.length || required.some(name => !bones[name])) {
+        throw new Error('O modelo do motorista não possui a postura sentada esperada.');
+    }
+    const standingHeight = new THREE.Box3().setFromObject(source).getSize(new THREE.Vector3()).y;
+    // O modelo traz todos os materiais em BLEND; a ordenação de transparência gera manchas no rosto e no corpo.
+    skinned.forEach(mesh => {
+        [].concat(mesh.material).forEach(material => {
+            material.transparent = false;
+            material.alphaTest = 0.5;
+            material.depthWrite = true;
+            material.needsUpdate = true;
+        });
+    });
+    const mixer = new THREE.AnimationMixer(source);
+    mixer.clipAction(clip).play();
+    return { source, skinned, bones, mixer, standingHeight };
+}
+
+function aimDriverBone(bone, childPosition, targetPosition) {
+    const origin = bone.getWorldPosition(new THREE.Vector3());
+    const delta = new THREE.Quaternion().setFromUnitVectors(
+        childPosition.clone().sub(origin).normalize(),
+        targetPosition.clone().sub(origin).normalize()
+    );
+    const world = bone.getWorldQuaternion(new THREE.Quaternion());
+    const parent = bone.parent.getWorldQuaternion(new THREE.Quaternion()).invert();
+    bone.quaternion.copy(parent.multiply(delta.multiply(world)));
+    bone.updateMatrixWorld(true);
+}
+
+function reachDriverHand(rig, side, target, pole) {
+    const upper = rig.bones[`${side}Arm`];
+    const fore = rig.bones[`${side}ForeArm`];
+    const hand = rig.bones[`${side}Hand`];
+    const shoulder = upper.getWorldPosition(new THREE.Vector3());
+    const elbow = fore.getWorldPosition(new THREE.Vector3());
+    const wrist = hand.getWorldPosition(new THREE.Vector3());
+    const upperLength = shoulder.distanceTo(elbow);
+    const foreLength = elbow.distanceTo(wrist);
+    const toTarget = target.clone().sub(shoulder);
+    const distance = THREE.MathUtils.clamp(
+        toTarget.length(), Math.abs(upperLength - foreLength) + 1e-4, upperLength + foreLength - 1e-4
+    );
+    const axis = toTarget.normalize();
+    const along = (upperLength ** 2 - foreLength ** 2 + distance ** 2) / (2 * distance);
+    const bend = Math.sqrt(Math.max(0, upperLength ** 2 - along ** 2));
+    const side3 = pole.clone().addScaledVector(axis, -pole.dot(axis)).normalize();
+    const newElbow = shoulder.clone().addScaledVector(axis, along).addScaledVector(side3, bend);
+    aimDriverBone(upper, elbow, newElbow);
+    aimDriverBone(fore, hand.getWorldPosition(new THREE.Vector3()), shoulder.clone().addScaledVector(axis, distance));
+}
+
+function bakeDriver(rig, layout) {
+    const { bones } = rig;
+    const scale = DRIVER_MODEL.height * (layout.scale ?? 1) / rig.standingHeight;
+    rig.mixer.setTime(DRIVER_MODEL.poseTime);
+    rig.source.updateMatrixWorld(true);
+    const hips = bones.Hips.getWorldPosition(new THREE.Vector3());
+
+    // Pontos de pegada no aro do volante, em metros a partir do quadril (x = esquerda, y = cima, z = frente).
+    const wheel = layout.wheel;
+    const tilt = THREE.MathUtils.degToRad(wheel.tilt);
+    const grip = THREE.MathUtils.degToRad(wheel.grip ?? 60);
+    const rimUp = new THREE.Vector3(0, Math.cos(tilt), Math.sin(tilt));
+    const center = new THREE.Vector3(0, wheel.y - layout.y, layout.z - wheel.z);
+    [['Left', 1], ['Right', -1]].forEach(([side, sign]) => {
+        const point = center.clone()
+            .addScaledVector(new THREE.Vector3(sign, 0, 0), Math.sin(grip) * wheel.radius)
+            .addScaledVector(rimUp, Math.cos(grip) * wheel.radius);
+        reachDriverHand(
+            rig, side, hips.clone().addScaledVector(point, 1 / scale),
+            new THREE.Vector3(sign * 0.6, -1, -0.35)
+        );
+        const hand = bones[`${side}Hand`];
+        hand.rotateY(sign * (layout.handTwist ?? 0));
+        hand.updateMatrixWorld(true);
+        ['Thumb', 'Index', 'Middle', 'Ring', 'Pinky'].forEach(finger => {
+            for (let joint = 1; joint <= 3; joint++) {
+                const bone = bones[`${side}Hand${finger}${joint}`];
+                if (!bone) continue;
+                bone.rotateZ(sign * (layout.fingerCurl ?? 0.7) * (finger === 'Thumb' ? 0.5 : 1));
+                bone.updateMatrixWorld(true);
+            }
+        });
+    });
+
+    const group = new THREE.Group();
+    const vertex = new THREE.Vector3();
+    let lowest = Infinity;
+    rig.skinned.forEach(mesh => {
+        mesh.skeleton.update();
+        const source = mesh.geometry;
+        const count = source.attributes.position.count;
+        const positions = new Float32Array(count * 3);
+        for (let i = 0; i < count; i++) {
+            mesh.boneTransform(i, vertex).applyMatrix4(mesh.matrixWorld).sub(hips).multiplyScalar(scale);
+            // Achata a parte escondida pelo piso em cabines sem espaço para as pernas.
+            if (layout.minY !== undefined) vertex.y = Math.max(vertex.y, layout.minY - layout.y);
+            positions.set([vertex.x, vertex.y, vertex.z], i * 3);
+            lowest = Math.min(lowest, vertex.y);
+        }
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        Object.entries(source.attributes).forEach(([name, attribute]) => {
+            if (!/^(position|normal|skinIndex|skinWeight)$/.test(name)) geometry.setAttribute(name, attribute);
+        });
+        if (source.index) geometry.setIndex(source.index);
+        geometry.computeVertexNormals();
+        const baked = new THREE.Mesh(geometry, mesh.material);
+        baked.castShadow = true;
+        baked.receiveShadow = false;
+        baked.userData.sharedResource = true;
+        group.add(baked);
+    });
+    group.userData.soleY = lowest;
+    return group;
+}
+
+function getVehicleDriver(rig, vehicleId, layout) {
+    const key = `${rig.id}:${vehicleId}`;
+    if (!driverBakes.has(key)) driverBakes.set(key, bakeDriver(rig, layout));
+    return driverBakes.get(key).clone(true);
+}
+
+function addRigidVehicleDriver(root, rig, vehicleId, layout) {
+    const front = new THREE.Box3().setFromObject(root).max.z;
+    const driver = getVehicleDriver(rig, vehicleId, layout);
+    driver.position.set(layout.x, layout.y, front - layout.z);
+    root.add(driver);
+}
+
+// A cabine recebe escalas diferentes por eixo; o motorista compensa isso para manter as proporções reais.
+function addCabDriver(cab, rig, vehicleId, layout, scale) {
+    cab.updateMatrixWorld(true);
+    const front = new THREE.Box3().setFromObject(cab).max.z;
+    const driver = getVehicleDriver(rig, vehicleId, layout);
+    const placement = new THREE.Matrix4().compose(
+        new THREE.Vector3(layout.x * scale, layout.y * scale, front - layout.z * scale),
+        new THREE.Quaternion(),
+        new THREE.Vector3(scale, scale, scale)
+    );
+    driver.matrixAutoUpdate = true;
+    new THREE.Matrix4().copy(cab.matrixWorld).invert().multiply(placement)
+        .decompose(driver.position, driver.quaternion, driver.scale);
+    cab.add(driver);
+}
+
 function loadRigidVehicle(tr) {
-    if (!rigidVehiclePromises.has(tr.modelo)) {
+    const cacheKey = `${tr.modelo}:${getSelectedDriverId() ?? 'none'}`;
+    if (!rigidVehiclePromises.has(cacheKey)) {
         const cfg = RIGID_VEHICLE_MODELS[tr.modelo];
         const sourcePromise = loadCompressedGlb(cfg.compressedUrl, cfg.url);
         const logoPromise = cfg.ivecoLogo ? loadIvecoLogoImage() : Promise.resolve(null);
-        const promise = Promise.all([sourcePromise, logoPromise])
-            .then(([source, logo]) => buildRigidVehicle(source, cfg, tr, logo));
-        rigidVehiclePromises.set(tr.modelo, promise);
+        const driverPromise = cfg.driver ? loadDriverRig() : Promise.resolve(null);
+        const promise = Promise.all([sourcePromise, logoPromise, driverPromise])
+            .then(([source, logo, driverRig]) => {
+                const vehicle = buildRigidVehicle(source, cfg, tr, logo);
+                if (driverRig) {
+                    try {
+                        addRigidVehicleDriver(vehicle, driverRig, tr.modelo, cfg.driver);
+                    } catch (error) {
+                        console.warn(`Não foi possível posicionar o motorista em ${tr.modelo}.`, error);
+                    }
+                }
+                return vehicle;
+            });
+        rigidVehiclePromises.set(cacheKey, promise);
         promise.catch(() => {
-            if (rigidVehiclePromises.get(tr.modelo) === promise) rigidVehiclePromises.delete(tr.modelo);
+            if (rigidVehiclePromises.get(cacheKey) === promise) rigidVehiclePromises.delete(cacheKey);
         });
     }
-    return rigidVehiclePromises.get(tr.modelo);
+    return rigidVehiclePromises.get(cacheKey);
 }
 
 function mergeVehicleGeometries(geometries) {
@@ -1405,6 +1620,7 @@ document.querySelectorAll('[data-vehicle-tab]').forEach(button => {
 setVehicleSelectorTab('carreta');
 
 inputs.cavalinho.addEventListener('change', analyzeAndDraw);
+document.getElementById('input_motorista').addEventListener('change', analyzeAndDraw);
 inputs.posicao.addEventListener('change', analyzeAndDraw);
 inputs.tampas.addEventListener('change', analyzeAndDraw);
 inputs.placa_prancha.addEventListener('change', () => {
@@ -4043,7 +4259,8 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
     if (isRigidTruck) addRigidTruckModel();
     else {
         setVehicleModelStatus('');
-        const promise = loadCabModel(cabModelId).then(source => {
+        const driverPromise = CAB_MODELS[cabModelId].driver ? loadDriverRig() : Promise.resolve(null);
+        const promise = Promise.all([loadCabModel(cabModelId), driverPromise]).then(([source, driverRig]) => {
         if (!isCurrent()) return;
 
         const object = source.clone(true);
@@ -4250,6 +4467,13 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
             const fifthWheel = CAB_MODELS[cabModelId].fifthWheel;
             const kingpinZ = shiftZ - 0.5 * S;
             object.position.z += kingpinZ - fifthWheel.z * S;
+            if (driverRig) {
+                try {
+                    addCabDriver(object, driverRig, cabModelId, CAB_MODELS[cabModelId].driver, S);
+                } catch (error) {
+                    console.warn(`Não foi possível posicionar o motorista em ${cabModelId}.`, error);
+                }
+            }
             const kingpinTop = (isCarreta ? deckY - 0.26 * S : pH - 0.2 * S);
             const kingpinBottom = fifthWheel.y * S - 0.03 * S;
             const kingpinHeight = kingpinTop - kingpinBottom;
@@ -6154,6 +6378,7 @@ function setCargaTab(tab) {
             prancha: inputs.placa_prancha.value,
             carreta: inputs.placa_carreta.value,
             caminhao: inputs.placa_caminhao.value,
+            motorista: document.getElementById('input_motorista').value,
             vehicleTab: document.querySelector('[data-vehicle-tab][aria-selected="true"]')?.dataset.vehicleTab
         };
         if (!TUBE_TRAILER_IDS.has(getActiveTrailerId())) {
@@ -6309,6 +6534,7 @@ function capturePlanState() {
             prancha: inputs.placa_prancha.value,
             carreta: inputs.placa_carreta.value,
             caminhao: inputs.placa_caminhao.value,
+            motorista: document.getElementById('input_motorista').value,
             posicao: inputs.posicao.value,
             tampas: inputs.tampas.value
         },
@@ -6401,6 +6627,7 @@ function restorePlanState(state) {
     inputs.placa_prancha.value = state.trailer.prancha || '';
     inputs.placa_carreta.value = state.trailer.carreta || '';
     inputs.placa_caminhao.value = state.trailer.caminhao || '';
+    document.getElementById('input_motorista').value = state.trailer.motorista ?? 'motorista_1';
     setVehicleSelectorTab(state.vehicleTab);
     if (state.activeTab === 'tubos' && state.cargoTrailerSelectionBeforeTubes) {
         cargoTrailerSelectionBeforeTubes = { ...state.cargoTrailerSelectionBeforeTubes };
