@@ -155,6 +155,7 @@ const RIGID_VEHICLE_MODELS = {
         animationWheels: { z: [0.54, -1.34], y: 0.25, radius: 0.25, minX: 0.5, meshes: /^WHEEL_/ },
         cabLight: { x: 0, y: 1.3, z: 0.53 },
         brighten: true,
+        glassMaterial: /^windscreen\.2$/,
         paints: []
     },
     vuc_mercedes: {
@@ -1172,6 +1173,14 @@ function buildRigidVehicle(source, cfg, spec, ivecoLogo) {
         if (cfg.interior?.test(name) && material.emissive) {
             material.emissive.setHex(0xfff1d6);
             material.emissiveIntensity = /Dashboard|LED/i.test(name) ? 0.9 : 0.3;
+        }
+        if (cfg.glassMaterial?.test(name)) {
+            material.color.setHex(0xe6eef2);
+            material.transparent = true;
+            material.opacity = 0.25;
+            material.depthWrite = false;
+            material.metalness = 0;
+            material.roughness = 0.2;
         }
         material.needsUpdate = true;
         paintedMaterials.set(original, material);
@@ -2421,7 +2430,7 @@ function initThreeJS() {
 
 const FLEET_YARD_MODELS = [
     ['caminhao_saveiro', 'Picape Saveiro'],
-    ['caminhao_vuc_chevrolet', 'VUC F350 Chevrolet'],
+    ['caminhao_vuc_honda', 'VUC F350 Honda'],
     ['caminhao_toco', 'Caminhão Toco'],
     ['caminhao_truck', 'Caminhão Truck'],
     ['carreta_padrao', 'Carreta Padrão'],

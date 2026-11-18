@@ -46,7 +46,7 @@ Para incluir novos arquivos, adicione também os nomes à lista `GENERAL_CARGO_F
 
 ## Caminhões
 
-A opção **Comparar Frota (3D)** abre o Pátio da Frota sem alterar o planejamento. A cena reúne sete veículos, incluindo as pranchas reta e rebaixada com mesa de 7 m, com o cavalinho selecionado nas composições, grade de 1 metro, controles de órbita e repetição da animação. As dimensões dos modelos são aproximadas: o cadastro não informa o comprimento total dos caminhões ou das composições com cavalinho. Confira as medidas reais antes de utilizá-las no planejamento.
+A opção **Comparar Frota (3D)** abre o Pátio da Frota sem alterar o planejamento. A cena reúne sete veículos, incluindo a VUC Honda e as pranchas reta e rebaixada com mesa de 7 m, com o cavalinho selecionado nas composições, grade de 1 metro, controles de órbita e repetição da animação. As dimensões dos modelos são aproximadas: o cadastro não informa o comprimento total dos caminhões ou das composições com cavalinho. Confira as medidas reais antes de utilizá-las no planejamento.
 
 **Animar Transporte** mostra o veículo e as cargas da visualização atual em uma estrada cercada por grama e montanhas, sob céu azul, com movimento contínuo e giro das rodas dos cavalinhos, caminhões e utilitários. A câmera gira lentamente e também pode ser controlada arrastando ou usando a roda do mouse; fechar a animação não altera o planejamento.
 
