@@ -27,7 +27,7 @@ const vehicleModels = [
     ['caminhões/F350-chevrolet.glb', 'modelos/vuc-chevrolet.glb.gz'],
     ['caminhões/F350-honda_acty.glb', 'modelos/vuc-honda.glb.gz'],
     ['caminhões/F350-mercedes-benz.glb', 'modelos/vuc-mercedes.glb.gz'],
-    ['caminhões/saveiro.glb', 'modelos/saveiro.glb.gz'],
+    ['caminhões/volkswagen_saveiro.glb', 'modelos/volkswagen-saveiro.glb.gz'],
     ['motoristas/motorista.glb', 'modelos/motorista.glb.gz'],
     ['motoristas/motorista-2.glb', 'modelos/motorista-2.glb.gz']
 ];

@@ -25,7 +25,7 @@ test('publicação web inclui modelos compactados e originais; shell Android nã
         const vehicles = [
             ['Truck (2).glb', 'truck.glb.gz'], ['Toco (2).glb', 'toco.glb.gz'],
             ['F350-chevrolet.glb', 'vuc-chevrolet.glb.gz'], ['F350-honda_acty.glb', 'vuc-honda.glb.gz'],
-            ['F350-mercedes-benz.glb', 'vuc-mercedes.glb.gz'], ['saveiro.glb', 'saveiro.glb.gz'],
+            ['F350-mercedes-benz.glb', 'vuc-mercedes.glb.gz'], ['volkswagen_saveiro.glb', 'volkswagen-saveiro.glb.gz'],
             ['../motoristas/motorista.glb', 'motorista.glb.gz'], ['../motoristas/motorista-2.glb', 'motorista-2.glb.gz']
         ];
         vehicles.forEach(([source]) => put(path.join('caminhões', source)));

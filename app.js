@@ -27,7 +27,7 @@ const bdVeiculos = {
     "caminhao_vuc_chevrolet": { tipo: "caminhao", grupo: "VUC", nome: "VUC F350 Chevrolet", modelo: "vuc_chevrolet", paredesFixas: true, w: 2.06, w_util: 2.00, h: 1.10, pescoco: 0, mesa: 4.20, eixos: 2, cap: 1, cabL: 1.9, cabH: 2.6, rearAxles: 1, wheelR: 0.45 },
     "caminhao_vuc_honda": { tipo: "caminhao", grupo: "VUC", nome: "VUC F350 Honda", modelo: "vuc_honda", paredesFixas: true, w: 2.06, w_util: 2.00, h: 1.10, pescoco: 0, mesa: 4.20, eixos: 2, cap: 1, cabL: 1.9, cabH: 2.4, rearAxles: 1, wheelR: 0.45 },
     "caminhao_vuc_mercedes": { tipo: "caminhao", grupo: "VUC", nome: "VUC F350 Mercedes-Benz", modelo: "vuc_mercedes", paredesFixas: true, w: 2.06, w_util: 2.00, h: 1.10, pescoco: 0, mesa: 4.20, eixos: 2, cap: 1, cabL: 2.2, cabH: 2.5, rearAxles: 1, wheelR: 0.45 },
-    "caminhao_saveiro": { tipo: "caminhao", grupo: "Utilitário", nome: "Utilitário Saveiro", modelo: "saveiro", paredesFixas: true, w: 1.06, w_util: 1.00, h: 0.80, pescoco: 0, mesa: 1.80, eixos: 2, cap: 0.4, cabL: 1.9, cabH: 1.4, rearAxles: 1, wheelR: 0.36 }
+    "caminhao_saveiro": { tipo: "caminhao", grupo: "Utilitário", nome: "Utilitário Saveiro", modelo: "saveiro", paredesFixas: true, w: 1.06, w_util: 1.00, h: 0.55, pescoco: 0, mesa: 1.80, eixos: 2, cap: 0.4, cabL: 1.9, cabH: 1.4, rearAxles: 1, wheelR: 0.36 }
 };
 
 function isMesaOnlyVehicle(tr) {
@@ -182,22 +182,21 @@ const RIGID_VEHICLE_MODELS = {
         ]
     },
     saveiro: {
-        url: './caminhões/saveiro.glb',
-        compressedUrl: './modelos/saveiro.glb.gz',
+        url: './caminhões/volkswagen_saveiro.glb',
+        compressedUrl: './modelos/volkswagen-saveiro.glb.gz',
         rotationY: 0,
-        unit: 1,
-        preScale: 1.1,
-        bed: { front: -0.53, rear: -1.857, width: 1.04, floor: 0.566, centerX: 0 },
-        wheels: { z: [1.53, -0.48], radius: 0.26, innerX: 0.38, scale: 1.1, offsetY: 0.033 },
-        animationWheels: { z: [1.53, -0.48], y: 0.23, radius: 0.26, minX: 0.38, meshes: /^Tire_/ },
-        cabLight: { x: 0, y: 0.98, z: 0.43 },
-        driver: { x: -0.23, y: 0.8, z: 1.75, scale: 0.72, minY: 0.65, wheel: { y: 0.97, z: 1.25, tilt: 30, radius: 0.18 } },
+        unit: 100,
+        preScale: 1,
+        bed: { front: -0.411, rear: -2.046, width: 1.30, floor: 0.56, centerX: 0 },
+        wheels: { z: [1.787, -0.965], radius: 0.297, innerX: 0.6, scale: 1 },
+        animationWheels: { z: [1.787, -0.965], y: 0.297, radius: 0.297, minX: 0.6, meshes: /^(Tire_Acero_Rims|Acero_Rims|Ext_Brake_(FL|FR)_Rotor)/ },
+        cabLight: { x: 0, y: 1.1, z: 0.7 },
+        driver: { x: 0.33, y: 0.65, z: 2.13, scale: 0.9, minY: 0.22, wheel: { y: 0.82, z: 1.65, tilt: 30, radius: 0.17 } },
         paints: [
-            { match: /BODYPAINT/i, color: VEHICLE_BODY_WHITE, metalness: 0.05, roughness: 0.68 },
-            { match: /^METAL$/i, color: VEHICLE_DETAIL_GRAY }
+            { match: /^CarPaint$/i, color: VEHICLE_BODY_WHITE, metalness: 0.05, roughness: 0.68 }
         ],
         bedFloorColor: 0x202124,
-        groundY: 0
+        groundY: -0.0015
     }
 };
 
