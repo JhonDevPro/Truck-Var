@@ -4126,6 +4126,7 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
         [-1,1].forEach(side => {
             box(railWidth,railHeight,length+0.2*S,frame,side*(width/2-railWidth/2),railY,centerZ);
         });
+        box(width,railHeight,railWidth,frame,0,railY,centerZ+length/2-railWidth/2);
     }
 
     function drawTrailerSideboardDetails(width,length,deckY,height,thickness,centerZ,includeSides) {
