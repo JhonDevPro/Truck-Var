@@ -410,6 +410,43 @@ const GENERAL_CARGO_TYPES = GENERAL_CARGO_FILES.map(file => ({
     label: file.replace(/\.glb$/i, '').replace(/[_-]+/g, ' ')
 }));
 const generalCargoByType = new Map(GENERAL_CARGO_TYPES.map(type => [type.value, type]));
+const DISPLAY_NAME_STORAGE_KEY = 'truck-var-display-names';
+
+function readDisplayNameOverrides() {
+    try {
+        const stored = localStorage.getItem(DISPLAY_NAME_STORAGE_KEY);
+        if (!stored) return new Map();
+        const parsed = JSON.parse(stored);
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+            throw new TypeError('Os nomes personalizados salvos têm um formato inválido.');
+        }
+        return new Map(Object.entries(parsed).filter(([, name]) => typeof name === 'string' && name.trim()));
+    } catch (error) {
+        console.warn('Não foi possível ler os nomes personalizados salvos.', error);
+        return new Map();
+    }
+}
+
+const displayNameOverrides = readDisplayNameOverrides();
+
+function displayNameKey(category, value) {
+    return `${category}:${value}`;
+}
+
+function getCustomDisplayName(category, value) {
+    return displayNameOverrides.get(displayNameKey(category, value)) || '';
+}
+
+function saveDisplayNameOverrides() {
+    try {
+        localStorage.setItem(DISPLAY_NAME_STORAGE_KEY, JSON.stringify(Object.fromEntries(displayNameOverrides)));
+        return true;
+    } catch (error) {
+        console.warn('Não foi possível salvar os nomes personalizados.', error);
+        return false;
+    }
+}
+
 const generalCargoPromises = new Map();
 const CARGO_ORIENTATIONS = [0, 90, 180, 270];
 // The GLB uses generated mesh names; these identify its tank shell.
@@ -461,7 +498,10 @@ function getGeneralCargoBounds(group, precise) {
 }
 
 function getCargoLabel(type) {
-    return generalCargoByType.get(type)?.label || LOAD_TYPES.find(item => item.value === type)?.label || 'Carga';
+    const generalCargoType = generalCargoByType.get(type);
+    if (generalCargoType) return getCustomDisplayName('general', type) || generalCargoType.label;
+    const loadType = LOAD_TYPES.find(item => item.value === type);
+    return loadType ? getCustomDisplayName('cargo', type) || loadType.label : 'Carga';
 }
 
 function loadGeneralCargo(type) {
@@ -508,6 +548,16 @@ function loadGeneralCargo(type) {
                                     return recolored;
                                 });
                                 child.material = Array.isArray(child.material) ? recoloredMaterials : recoloredMaterials[0];
+                            }
+                            if (model.file === 'solar_pallete.glb') {
+                                const materials = Array.isArray(child.material) ? child.material : [child.material];
+                                materials.forEach(material => {
+                                    material.transparent = false;
+                                    material.opacity = 1;
+                                    material.alphaTest = 0;
+                                    material.depthWrite = true;
+                                    material.needsUpdate = true;
+                                });
                             }
                             if (GENERAL_CARGO_DARK_MODELS.has(model.file)) {
                                 const materials = Array.isArray(child.material) ? child.material : [child.material];
@@ -2459,10 +2509,13 @@ function renderListaCargas() {
         editButton.className = 'flex flex-col flex-1 text-left cursor-pointer';
         editButton.title = 'Clique para editar esta carga';
         editButton.setAttribute('aria-label', `Editar ${carga.qtd} ${typeLabel}`);
-        editButton.innerHTML = `
-            <span class="font-bold text-slate-700">${carga.qtd}x ${typeLabel}</span>
-            <span class="text-slate-500">${formatDimensionDisplay(carga.comp)}m x ${formatDimensionDisplay(carga.larg)}m x ${formatDimensionDisplay(carga.alt)}m &bull; ${getCargoRotation(carga)}° &bull; ${carga.camadas || 1} camada(s)${carga.colocarSobreAnterior ? ' &bull; sobre a anterior' : ''} &bull; ${weightForInput(carga.peso, weightUnit)} ${weightUnit}/unid</span>
-        `;
+        const title = document.createElement('span');
+        title.className = 'font-bold text-slate-700';
+        title.textContent = `${carga.qtd}x ${typeLabel}`;
+        const details = document.createElement('span');
+        details.className = 'text-slate-500';
+        details.textContent = `${formatDimensionDisplay(carga.comp)}m x ${formatDimensionDisplay(carga.larg)}m x ${formatDimensionDisplay(carga.alt)}m \u2022 ${getCargoRotation(carga)}° \u2022 ${carga.camadas || 1} camada(s)${carga.colocarSobreAnterior ? ' \u2022 sobre a anterior' : ''} \u2022 ${weightForInput(carga.peso, weightUnit)} ${weightUnit}/unid`;
+        editButton.append(title, details);
         editButton.addEventListener('click', () => editarCarga(index));
 
         const removeButton = document.createElement('button');
@@ -2693,8 +2746,12 @@ function updateTrailerInfo() {
         if (currentTrailer.tipo === 'vanderleia') tipoNome = "Vanderléia";
         if (currentTrailer.tipo === 'sider') tipoNome = "Carreta Sider";
         if (currentTrailer.tipo === 'caminhao') tipoNome = currentTrailer.nome;
-        
-        infos.tagTipo.textContent = tipoNome;
+        const selectedVehicleCategory = [
+            ['prancha', inputs.placa_prancha],
+            ['carreta', inputs.placa_carreta],
+            ['caminhao', inputs.placa_caminhao]
+        ].find(([, select]) => select.value === placa)?.[0];
+        infos.tagTipo.textContent = getCustomDisplayName(selectedVehicleCategory, placa) || tipoNome;
         
         if (currentTrailer.tipo === 'caminhao') {
             infos.tagTipo.className = "px-2 py-1 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded";
@@ -6450,6 +6507,145 @@ function resizeMainView() {
 }
 window.addEventListener('resize', resizeMainView);
 
+function setupDisplayNameEditor() {
+    const categories = [
+        { id: 'cargo', label: 'Cargas normais', select: document.getElementById('input_tipo_carga') },
+        { id: 'general', label: 'Cargas gerais 3D', select: generalCargo.model },
+        { id: 'cavalinho', label: 'Cavalinhos', select: inputs.cavalinho },
+        { id: 'prancha', label: 'Pranchas', select: inputs.placa_prancha },
+        { id: 'carreta', label: 'Carretas', select: inputs.placa_carreta },
+        { id: 'caminhao', label: 'Caminhões', select: inputs.placa_caminhao }
+    ];
+
+    function updateSelectLabels() {
+        categories.forEach(category => {
+            Array.from(category.select.options).forEach(option => {
+                if (!option.value) return;
+                if (!option.dataset.originalName) option.dataset.originalName = option.textContent || '';
+                option.textContent = getCustomDisplayName(category.id, option.value) || option.dataset.originalName;
+            });
+        });
+    }
+
+    function refreshLabels(categoryId) {
+        if (categoryId === 'prancha' || categoryId === 'carreta' || categoryId === 'caminhao') {
+            updateTrailerInfo();
+        } else {
+            analyzeAndDraw();
+        }
+    }
+
+    updateSelectLabels();
+
+    categories.forEach(category => {
+        const select = category.select;
+        const row = document.createElement('div');
+        row.className = `flex gap-1${select.classList.contains('mb-2') ? ' mb-2' : ''}`;
+        select.parentElement.insertBefore(row, select);
+        row.appendChild(select);
+        select.classList.remove('mb-2');
+        select.classList.add('min-w-0', 'flex-1');
+
+        const gearButton = document.createElement('button');
+        gearButton.type = 'button';
+        gearButton.textContent = '\u2699';
+        gearButton.title = `Editar nome da opção selecionada em ${category.label}`;
+        gearButton.setAttribute('aria-label', gearButton.title);
+        gearButton.className = 'grid h-9 w-9 shrink-0 place-items-center rounded-md border border-slate-300 bg-white text-lg text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40';
+        gearButton.disabled = !select.value;
+        row.appendChild(gearButton);
+
+        const panel = document.createElement('div');
+        panel.className = 'mt-2 mb-2 hidden rounded-md border border-slate-200 bg-slate-50 p-2';
+        const label = document.createElement('label');
+        label.className = 'mb-1 block text-[11px] font-semibold text-slate-600';
+        label.textContent = 'Nome exibido para a opção selecionada';
+        const nameInput = document.createElement('input');
+        nameInput.type = 'text';
+        nameInput.maxLength = 80;
+        nameInput.placeholder = 'Digite o nome desejado';
+        nameInput.className = 'mb-2 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm';
+        label.htmlFor = `display_name_${category.id}`;
+        nameInput.id = label.htmlFor;
+
+        const actions = document.createElement('div');
+        actions.className = 'flex gap-2';
+        const saveButton = document.createElement('button');
+        saveButton.type = 'button';
+        saveButton.textContent = 'Salvar nome';
+        saveButton.className = 'rounded-md bg-blue-700 px-3 py-1.5 text-xs font-bold text-white hover:bg-blue-800';
+        const resetButton = document.createElement('button');
+        resetButton.type = 'button';
+        resetButton.textContent = 'Original';
+        resetButton.title = 'Restaurar o nome original';
+        resetButton.className = 'rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100';
+        actions.append(saveButton, resetButton);
+
+        const status = document.createElement('p');
+        status.className = 'mt-1 text-[11px] text-slate-600';
+        status.setAttribute('role', 'status');
+        status.setAttribute('aria-live', 'polite');
+        panel.append(label, nameInput, actions, status);
+        row.parentElement.insertBefore(panel, row.nextSibling);
+
+        function updateEditorValue() {
+            const option = select.selectedOptions[0];
+            gearButton.disabled = !select.value;
+            nameInput.value = option
+                ? getCustomDisplayName(category.id, select.value) || option.dataset.originalName || option.textContent || ''
+                : '';
+        }
+
+        function setStatus(message, isError = false) {
+            status.textContent = message;
+            status.classList.toggle('text-red-700', isError);
+        }
+
+        function saveName() {
+            const itemValue = select.value;
+            const name = nameInput.value.trim();
+            if (!itemValue || !name) {
+                setStatus('Selecione uma opção e informe um nome.', true);
+                return;
+            }
+            displayNameOverrides.set(displayNameKey(category.id, itemValue), name);
+            const saved = saveDisplayNameOverrides();
+            updateSelectLabels();
+            updateEditorValue();
+            refreshLabels(category.id);
+            setStatus(saved ? 'Nome salvo neste navegador.' : 'Nome aplicado nesta sessão, mas não foi possível salvá-lo.', !saved);
+        }
+
+        gearButton.addEventListener('click', () => {
+            panel.classList.toggle('hidden');
+            if (!panel.classList.contains('hidden')) {
+                updateEditorValue();
+                nameInput.focus();
+            }
+        });
+        select.addEventListener('change', updateEditorValue);
+        saveButton.addEventListener('click', saveName);
+        resetButton.addEventListener('click', () => {
+            if (!select.value) {
+                setStatus('Selecione uma opção para restaurar.', true);
+                return;
+            }
+            displayNameOverrides.delete(displayNameKey(category.id, select.value));
+            const saved = saveDisplayNameOverrides();
+            updateSelectLabels();
+            updateEditorValue();
+            refreshLabels(category.id);
+            setStatus(saved ? 'Nome original restaurado.' : 'Nome original aplicado nesta sessão, mas não foi possível salvar.', !saved);
+        });
+        nameInput.addEventListener('keydown', event => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                saveName();
+            }
+        });
+    });
+}
+
 const tipoCargaSelect = document.getElementById('input_tipo_carga');
 const divArmador = document.getElementById('div_armador');
 const inputArmador = document.getElementById('input_armador');
@@ -6467,6 +6663,7 @@ LOAD_TYPES.forEach(({ value, label }) => {
     }
 });
 tipoCargaSelect.appendChild(containerOptions);
+setupDisplayNameEditor();
 
 tipoCargaSelect.addEventListener('change', () => {
     const val = tipoCargaSelect.value;
