@@ -22,7 +22,12 @@ const end = source.indexOf('function separateFortniteWheels', start);
 assert.ok(start >= 0 && end > start, 'Cálculo dos limites de transporte não encontrado');
 const context = vm.createContext({ THREE: { Box3, Matrix4 } });
 vm.runInContext(source.slice(start, end), context);
+const wheelRotationStart = source.indexOf('function applyTransportWheelRotation');
+const wheelRotationEnd = source.indexOf('function animateFleetYard', wheelRotationStart);
+assert.ok(wheelRotationStart >= 0 && wheelRotationEnd > wheelRotationStart, 'Rotação das rodas não encontrada');
+vm.runInContext(source.slice(wheelRotationStart, wheelRotationEnd), context);
 const getTransportBounds = vm.runInContext('getTransportBounds', context);
+const applyTransportWheelRotation = vm.runInContext('applyTransportWheelRotation', context);
 
 test('limites incluem as posições das instâncias, não a geometria-base na origem', () => {
     const vehicle = { geometry: { boundingBox: new Box3(0, 3) }, matrixWorld: new Matrix4() };
@@ -40,4 +45,19 @@ test('limites incluem as posições das instâncias, não a geometria-base na or
     const bounds = getTransportBounds(root);
     assert.equal(bounds.min, 0);
     assert.equal(bounds.max, 20.5);
+});
+
+test('rodas giram para frente no sentido de deslocamento em ambos os tipos de eixo', () => {
+    const angle = 8 / 0.5;
+    const ordinaryWheel = { radius: 0.5, group: { rotation: { x: 0 } } };
+    applyTransportWheelRotation(ordinaryWheel, 8);
+    assert.equal(ordinaryWheel.group.rotation.x, angle);
+
+    const axisWheel = {
+        radius: 0.5,
+        axis: { x: 1, y: 0, z: 0 },
+        group: { quaternion: { setFromAxisAngle(axis, value) { this.axis = axis; this.angle = value; } } }
+    };
+    applyTransportWheelRotation(axisWheel, 8);
+    assert.equal(axisWheel.group.quaternion.angle, angle);
 });

@@ -3,7 +3,7 @@ const bdVeiculos = {
     "prancha_reb_6_3": { tipo: "rebaixada", w: 3.00, h: 1.10, pescoco: 3.50, mesa: 6.30, compTotal: 14.50, eixos: 3, cap: 45 },
     "prancha_reb_7_0": { tipo: "rebaixada", w: 3.00, h: 0.70, pescoco: 3.80, mesa: 7.00, compTotal: 16.70, eixos: 3, cap: 45 },
     "prancha_reb_6_0": { tipo: "rebaixada", w: 3.20, h: 0.90, pescoco: 3.60, transicao: 1.40, mesa: 6.00, areaCargaTotal: 11.00, compTotal: 14.60, eixos: 3, cap: 45 },
-    "prancha_reta_12_5": { tipo: "reta", w: 3.20, h: 1.20, pescoco: 3.60, mesa: 12.55, compTotal: 18.00, eixos: 3, cap: 40 },
+    "prancha_reta_12_5": { tipo: "reta", w: 3.20, h: 1.00, pescoco: 3.60, mesa: 12.55, compTotal: 18.00, eixos: 3, cap: 40 },
     "prancha_semi_3_9": { tipo: "semi-rebaixada", w: 3.00, h: 0.80, pescoco: 3.65, mesa: 4.00, compTotal: 13.50, eixos: 3, cap: 35 },
     "prancha_reb_4_11_3": { tipo: "rebaixada", w: 3.00, h: 0.90, pescoco: 3.70, mesa: 11.30, compTotal: 19.00, eixos: 4, cap: 60 },
     // --- NOVAS PRANCHAS REGISTADAS ---
@@ -642,6 +642,57 @@ function getLoadStartClearance(type, tr) {
     return isLockedLoad(type, tr) ? 1.4 : 0.2;
 }
 
+const CARRETA_CONTAINER_LOCK_LAYOUT = Object.freeze({
+    firstStation: 1.4,
+    stationPitch: 3.05,
+    doubleLockOffset: 0.08,
+    stationCount: 5
+});
+
+function hasCarretaContainerLockLayout(tr, isCarreta) {
+    return isCarreta && [14, 15].includes(Number(tr?.mesa));
+}
+
+function getCarretaContainerLockOffsets(tr, isCarreta) {
+    if (!hasCarretaContainerLockLayout(tr, isCarreta)) return [];
+    const { firstStation, stationPitch, doubleLockOffset, stationCount } = CARRETA_CONTAINER_LOCK_LAYOUT;
+    return Array.from({ length: stationCount }, (_, index) => {
+        const station = firstStation + index * stationPitch;
+        if (index === 0) return [station + doubleLockOffset];
+        if (index === stationCount - 1) return [station - doubleLockOffset];
+        return [station - doubleLockOffset, station + doubleLockOffset];
+    }).flat();
+}
+
+function getCarretaContainerLockSlotCount(carga, tr, isCarreta) {
+    if (!hasCarretaContainerLockLayout(tr, isCarreta)) return 0;
+    const model = generalCargoByType.get(carga.type);
+    const isContainerOrCage = isContainerLoad(carga.type) ||
+        carga.type === 'cesta_metalica' ||
+        carga.type === 'cesta' ||
+        /cesta/i.test(model?.file || '');
+    if (!isContainerOrCage) return 0;
+
+    const length = Number(carga.comp);
+    if (!Number.isFinite(length)) return 0;
+    const identifier = `${carga.type} ${model?.file || ''}`;
+    const sizeMatch = identifier.match(/(?:^|[^0-9])(10|20|40)(?:[^0-9]|$)/);
+    const requestedSlots = sizeMatch ? Number(sizeMatch[1]) / 10 : 0;
+    const measuredSlots = length >= 2.7 && length <= 3.05
+        ? 1
+        : length > 3.05 && length <= 6.1
+            ? 2
+            : length > 11.3 && length <= 12.2
+                ? 4
+                : 0;
+    const slotCount = requestedSlots || measuredSlots;
+    if (!slotCount) return 0;
+
+    const minimumLength = slotCount === 1 ? 2.7 : slotCount === 2 ? 5.3 : 11.3;
+    const maximumLength = slotCount * CARRETA_CONTAINER_LOCK_LAYOUT.stationPitch;
+    return length >= minimumLength && length <= maximumLength ? slotCount : 0;
+}
+
 function getPranchaLoadStart(offset, clearance, areaLength, loadLength) {
     if (offset === 0 && loadLength <= areaLength + 1e-9 && clearance + loadLength > areaLength) {
         return Math.max(0, areaLength - loadLength);
@@ -657,8 +708,20 @@ function getPranchaAxleArea(tr) {
     const bridgeLength = 3.15;
     const rearTransition = 0.8;
     return tr.tipo === 'reta'
-        ? { length: Math.min(bridgeLength, tr.mesa), start: Math.max(0, tr.mesa - bridgeLength), height: 1.6 }
+        ? { length: Math.min(bridgeLength, tr.mesa), start: Math.max(0, tr.mesa - bridgeLength), height: tr.h }
         : { length: tr.mesaEixos ?? bridgeLength - rearTransition, start: tr.mesa + rearTransition, height: tr.h + 0.2 };
+}
+
+function getPranchaLandingGearGeometry(deckHeight, deckThickness = 0.24) {
+    const footBottom = 0.12;
+    const footHeight = 0.08;
+    const deckBottom = deckHeight - deckThickness;
+    const legTop = deckBottom - 0.02;
+    const legBottom = footBottom + footHeight;
+    if (legTop <= legBottom) {
+        throw new RangeError('Altura do assoalho insuficiente para os pés de desengate.');
+    }
+    return { footBottom, footHeight, legBottom, legTop };
 }
 
 const inputs = {
@@ -1790,21 +1853,29 @@ function getGridMetrics(tr, carga, isCarreta, cComp = carga.comp) {
     const lockClearance = isCarreta && requiresLoadLockClearance(type, tr)
         ? getLoadStartClearance(type, tr)
         : 0;
-    const isDistributed = isCarreta &&
+    const lockSlotCount = isCarreta ? getCarretaContainerLockSlotCount(carga, tr, isCarreta) : 0;
+    const lockSlotSpan = lockSlotCount
+        ? lockSlotCount * CARRETA_CONTAINER_LOCK_LAYOUT.stationPitch
+        : 0;
+    const isDistributed = !lockSlotCount && isCarreta &&
         peso * cQtd > tr.cap / 2 &&
         pecasNaBase > 1 &&
         pecasNaBase * cComp + lockClearance <= tr.mesa;
-    const gap = isDistributed
-        ? (tr.mesa - lockClearance - pecasNaBase * cComp) / (pecasNaBase - 1)
-        : standardGap;
+    const gap = lockSlotCount
+        ? lockSlotSpan - cComp
+        : isDistributed
+            ? (tr.mesa - lockClearance - pecasNaBase * cComp) / (pecasNaBase - 1)
+            : standardGap;
 
-    let maxCols = isDistributed
+    let maxCols = lockSlotCount || isDistributed
         ? 1
         : Math.floor((availableWidth + gap) / (cLarg + gap));
     if (maxCols < 1) maxCols = 1;
 
     const rows = Math.ceil(pecasNaBase / maxCols);
-    const totalComp = rows * cComp + Math.max(0, rows - 1) * gap;
+    const totalComp = lockSlotCount
+        ? rows * lockSlotSpan - gap / 2
+        : rows * cComp + Math.max(0, rows - 1) * gap;
     const maxItemsInRow = Math.min(pecasNaBase, maxCols);
     const totalLarg = maxItemsInRow * cLarg + Math.max(0, maxItemsInRow - 1) * gap;
 
@@ -1817,6 +1888,8 @@ function getGridMetrics(tr, carga, isCarreta, cComp = carga.comp) {
         centerX: getLoadAreaCenterX(tr),
         gap,
         isDistributed,
+        lockSlotCount,
+        lockSlotSpan,
         pecasNaBase,
         camadas,
         maxStackHeight: carga.alt * Math.min(camadas, cQtd)
@@ -2004,6 +2077,56 @@ function positionLoadAllocations(tr, isCarreta, allocations) {
 
     if (isCarreta) {
         const distributedLoads = loads.filter(load => load.grid.isDistributed);
+        const hasLockAlignedLoads = loads.some(load => load.grid.lockSlotCount > 0);
+        const hasConcentratedNonLockLoad = loads.some(
+            load => load.isConcentrada && !load.grid.lockSlotCount
+        );
+        if (hasLockAlignedLoads && !distributedLoads.length && !hasConcentratedNonLockLoad) {
+            const { firstStation, stationPitch } = CARRETA_CONTAINER_LOCK_LAYOUT;
+            const positionedLoadsByIndex = new Map();
+            let occupiedEnd = 0;
+            loads.forEach(load => {
+                const previousLoad = load.carga.colocarSobreAnterior &&
+                    allocations[load.compositionIndex - 1] > 0
+                    ? positionedLoadsByIndex.get(load.compositionIndex - 1)
+                    : null;
+                if (previousLoad) {
+                    load.startOffset = previousLoad.startOffset;
+                    positionedLoadsByIndex.set(load.compositionIndex, load);
+                    return;
+                }
+
+                if (load.grid.lockSlotCount) {
+                    const lockGap = load.grid.lockSlotSpan - load.carga.comp;
+                    const minimumOffset = Math.max(occupiedEnd, load.clearance);
+                    let slotIndex = Math.max(0, Math.ceil(
+                        (minimumOffset - firstStation - lockGap / 2 - 1e-9) / stationPitch
+                    ));
+                    let stationOffset = firstStation + slotIndex * stationPitch;
+                    load.startOffset = stationOffset + lockGap / 2;
+                    while (load.startOffset < minimumOffset - 1e-9) {
+                        stationOffset = firstStation + ++slotIndex * stationPitch;
+                        load.startOffset = stationOffset + lockGap / 2;
+                    }
+                    load.grid.gap = lockGap;
+                    load.grid.totalComp = load.grid.rows * load.grid.lockSlotSpan - lockGap / 2;
+                    occupiedEnd = stationOffset +
+                        load.grid.rows * load.grid.lockSlotSpan;
+                } else {
+                    load.startOffset = Math.max(occupiedEnd, load.clearance);
+                    occupiedEnd = load.startOffset + load.grid.totalComp + load.grid.gap;
+                }
+                positionedLoadsByIndex.set(load.compositionIndex, load);
+            });
+
+            applyStackingPositions(loads, allocations);
+            const mesaComp = loads.reduce(
+                (maxEnd, load) => Math.max(maxEnd, load.startOffset + load.grid.totalComp),
+                0
+            );
+            return { loads, totalComp: mesaComp, mesaComp, eixoComp: 0, allocations };
+        }
+
         if (distributedLoads.length) {
             distributedLoads.forEach(load => {
                 load.startOffset = requiresLoadLockClearance(load.carga.type, tr)
@@ -2889,6 +3012,12 @@ function replayFleetYard(yard) {
     });
 }
 
+function applyTransportWheelRotation(wheel, distance) {
+    const angle = (wheel.direction ?? 1) * distance / wheel.radius;
+    if (wheel.axis) wheel.group.quaternion.setFromAxisAngle(wheel.axis, angle);
+    else wheel.group.rotation.x = angle;
+}
+
 function animateFleetYard(yard, now) {
     if (!yard.active) return;
     yard.frame = requestAnimationFrame(time => animateFleetYard(yard, time));
@@ -2897,7 +3026,7 @@ function animateFleetYard(yard, now) {
             const progress = Math.max(0, Math.min(1, (now - yard.startedAt - index * 400) / 4000));
             const distance = 35 * (1 - Math.pow(1 - progress, 3));
             vehicle.root.position.z = -35 + distance;
-            vehicle.wheels.forEach(wheel => { wheel.group.rotation.x = -distance / wheel.radius; });
+            vehicle.wheels.forEach(wheel => applyTransportWheelRotation(wheel, distance));
         });
         if (yard.autoFrame) {
             const duration = 4000 + (yard.vehicles.length - 1) * 400;
@@ -3240,8 +3369,7 @@ function animateTransport(animation, now) {
         marker.position.z = ((marker.userData.startZ - distance + 180) % 360 + 360) % 360 - 180;
     });
     animation.wheels.forEach(wheel => {
-        if (wheel.axis) wheel.group.quaternion.setFromAxisAngle(wheel.axis, -distance / wheel.radius);
-        else wheel.group.rotation.x = (wheel.direction ?? -1) * distance / wheel.radius;
+        applyTransportWheelRotation(wheel, distance);
     });
     animation.controls.update();
     animation.renderer.render(animation.scene, animation.camera);
@@ -3629,7 +3757,7 @@ function analyzeTubesAndDraw(tr, isCarreta) {
     const tube = getTubeMetrics(tr);
     renderTubeResults(tube);
 
-    const floorHeight = tr.tipo === 'reta' ? 1.6 : tr.h;
+    const floorHeight = tr.h;
     const totalHeight = floorHeight + tube.stackHeightMm / 1000;
     const excessWidth = Math.max(0, (tube.widthOccupiedMm / 1000 - tr.w) / 2);
     const lengthUsage = tube.tubeLengthM;
@@ -3784,7 +3912,7 @@ function analyzeAndDraw() {
         }
     }
 
-    const pH = 1.60; 
+    const pH = tr.tipo === 'reta' ? tr.h : 1.60;
     let baseH = tr.h; 
     if (tr.tipo === 'reta') {
         baseH = pH;
@@ -4109,13 +4237,26 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
             });
         }
 
-        const tieDownCount = Math.max(3,Math.floor(length/(1.2*S)));
-        for (let i=0;i<=tieDownCount;i++){
-            const z = centerZ-length/2+length*i/tieDownCount;
-            [-1,1].forEach(side=>{
-                box(0.16*S,0.06*S,0.08*S,steel,side*(width/2-0.12*S),detailTopY+0.035*S,z);
-                box(0.045*S,0.12*S,0.08*S,steel,side*(width/2-0.12*S),detailTopY+0.08*S,z);
+        const containerLockOffsets = getCarretaContainerLockOffsets(tr,isCarreta);
+        if (containerLockOffsets.length) {
+            const frontZ = centerZ + length/2;
+            containerLockOffsets.forEach(offset => {
+                const z = frontZ - offset*S;
+                [-1,1].forEach(side => {
+                    const x = side*(width/2-0.12*S);
+                    box(0.16*S,0.06*S,0.08*S,steel,x,detailTopY+0.035*S,z);
+                    box(0.045*S,0.12*S,0.08*S,steel,x,detailTopY+0.08*S,z);
+                });
             });
+        } else {
+            const tieDownCount = Math.max(3,Math.floor(length/(1.2*S)));
+            for (let i=0;i<=tieDownCount;i++){
+                const z = centerZ-length/2+length*i/tieDownCount;
+                [-1,1].forEach(side=>{
+                    box(0.16*S,0.06*S,0.08*S,steel,side*(width/2-0.12*S),detailTopY+0.035*S,z);
+                    box(0.045*S,0.12*S,0.08*S,steel,side*(width/2-0.12*S),detailTopY+0.08*S,z);
+                });
+            }
         }
     }
 
@@ -4178,8 +4319,10 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
             box(0.22*S,0.26*S,length,chassisMat,side*beamOffset,beamY,centerZ);
 
             axlePositions.forEach(z=>{
-                const hangerHeight = beamY-0.13*S-(axleY+0.12*S);
-                box(0.12*S,hangerHeight,0.16*S,suspensionMat,side*beamOffset,axleY+0.12*S+hangerHeight/2,z);
+                const hangerStart = beamY-0.13*S;
+                const hangerEnd = axleY+0.12*S;
+                const hangerHeight = Math.max(0.02*S, Math.abs(hangerStart-hangerEnd));
+                box(0.12*S,hangerHeight,0.16*S,suspensionMat,side*beamOffset,(hangerStart+hangerEnd)/2,z);
                 box(0.14*S,0.06*S,0.9*S,chassisMat,side*beamOffset,axleY+0.22*S,z);
                 box(0.12*S,0.05*S,0.78*S,suspensionMat,side*beamOffset,axleY+0.16*S,z);
             });
@@ -4292,7 +4435,7 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
     if (!isCarreta) pL = tr.pescoco*S;
     
     const isRigidTruck = tr.tipo === 'caminhao';
-    const deckY = isRigidTruck ? hT : ((tr.tipo==='reta' || isCarreta) ? pH : hT);
+    const deckY = isRigidTruck || !isCarreta ? hT : pH;
     let rearStart = 0;
     if (isCarreta) {
         rearStart = -mL; 
@@ -4875,22 +5018,34 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
         mesh(new THREE.CylinderGeometry(0.1*S, 0.1*S, spareWidth + 0.02*S, 24), steel, 0, spareWidth/2, 0, spare);
 
         const supportZ = shiftZ - pL + 0.48*S;
-        const supportTop = pH - 0.1*S;
+        const landingGear = getPranchaLandingGearGeometry(pH/S, 0.1);
+        const supportTop = landingGear.legTop*S;
+        const supportBottom = landingGear.legBottom*S;
+        const supportHeight = supportTop-supportBottom;
+        const footHeight = landingGear.footHeight*S;
+        const footCenterY = (landingGear.footBottom+landingGear.footHeight/2)*S;
         [-1, 1].forEach(side => {
             const support = new THREE.Group();
             support.name = 'pe_de_apoio';
             support.position.set(side*wT*0.32, 0, supportZ);
             trailerGroup.add(support);
-            const outerBottom = 0.76*S;
-            box(0.24*S, supportTop-outerBottom, 0.24*S, frame, 0, (supportTop+outerBottom)/2, 0, support);
-            box(0.16*S, 0.52*S, 0.16*S, frame, 0, 0.60*S, 0, support);
-            const foot = mesh(new THREE.CylinderGeometry(0.11*S, 0.22*S, 0.14*S, 4), frame, 0, 0.35*S, 0, support);
+            box(0.24*S, supportHeight, 0.24*S, frame, 0, (supportTop+supportBottom)/2, 0, support);
+            const extensionTop = Math.min(0.60, landingGear.legTop);
+            const extensionHeight = extensionTop-landingGear.footBottom-landingGear.footHeight;
+            box(0.16*S, extensionHeight*S, 0.16*S, frame, 0,
+                (extensionTop+landingGear.footBottom+landingGear.footHeight)/2*S, 0, support);
+            const foot = mesh(new THREE.CylinderGeometry(0.11*S, 0.22*S, footHeight, 4), frame, 0, footCenterY, 0, support);
             foot.rotation.y = Math.PI/4;
         });
         
         if (tr.tipo==='reta'){
-            drawWoodDeckSegment(wT,0.24*S,mL,0,pH-0.12*S,-pL-mL/2+shiftZ,deckMat);
-            drawDeckDetails(wT,mL,-pL-mL/2+shiftZ,pH);
+            const neckBottom = pH-0.1*S;
+            const tableBottom = hT-0.24*S;
+            const connectorHeight = neckBottom-tableBottom;
+            box(wT*0.88,connectorHeight,0.18*S,frame,0,
+                (neckBottom+tableBottom)/2,-pL+shiftZ);
+            drawWoodDeckSegment(wT,0.24*S,mL,0,hT-0.12*S,-pL-mL/2+shiftZ,deckMat);
+            drawDeckDetails(wT,mL,-pL-mL/2+shiftZ,hT);
         } else {
             const dy = pH - hT;
             const rampL = Math.hypot(dropL, dy);
@@ -4923,10 +5078,10 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
             });
         }
         if (tr.tipo==='reta'){
-            drawStraightSuspension(wT,pH,pL+mL,(-pL-mL)/2+shiftZ,axleY,axlePositions);
+            drawStraightSuspension(wT,hT,mL,-pL-mL/2+shiftZ,axleY,axlePositions);
         }
 
-        drawRearRamps(wT,tr.tipo==='reta'?pH:hT+0.2*S,rearEnd+shiftZ);
+        drawRearRamps(wT,tr.tipo==='reta'?hT:hT+0.2*S,rearEnd+shiftZ);
     }
 
     if (comparison && !comparison.includeLoads) return Promise.all(modelPromises);
@@ -5053,7 +5208,7 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
         const footprintL = Math.max(.1, carga.comp) * S;
         
         const loadDeckY = !isCarreta && pos === 'eixos' && tr.tipo !== 'reta'
-            ? getPranchaAxleArea(tr).height*S : (tr.tipo === 'reta' ? pH : (isCarreta ? deckY + (usesChassisModel ? 0.002*S : 0) : hT));
+            ? getPranchaAxleArea(tr).height*S : (isCarreta ? deckY + (usesChassisModel ? 0.002*S : 0) : hT);
         const loadY = loadDeckY +
             stackBaseHeight * S + cH/2;
         const loadZ_start = loadFrontZ-startOffset*S;
@@ -5753,9 +5908,9 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
             const mesaOffset = mesaStartOffset;
             const mesaFrontZ = shiftZ-pL-getDeckTransitionLength(tr)*S-mesaOffset*S;
             const eixoFrontZ = shiftZ-pL-getDeckTransitionLength(tr)*S-(getPranchaAxleArea(tr).start+eixoStartOffset)*S;
-            const eixoDeckY = tr.tipo === 'reta' ? pH : getPranchaAxleArea(tr).height*S;
+            const eixoDeckY = getPranchaAxleArea(tr).height*S;
             const eixoY = eixoDeckY+stackBaseHeight*S+cH/2;
-            const mesaY = (tr.tipo==='reta'?pH:hT)+stackBaseHeight*S+cH/2;
+            const mesaY = hT+stackBaseHeight*S+cH/2;
 
             for (let i=0;i<grid.pecasNaBase;i++){
                 const r=Math.floor(i/grid.maxCols);
@@ -5773,7 +5928,7 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
                     const mesaItem=baseItem.clone();
                     mesaItem.position.set(itemX,mesaY+layer*cH,mesaFrontZ-coilLength/2-rowOffset);
                     loadGroup.add(mesaItem);
-                    drawLoadLashing(carga, mesaItem.position.x, mesaItem.position.y, mesaItem.position.z, footprintW, cH, coilLength, tr.tipo==='reta'?pH:hT, lashing, true);
+                    drawLoadLashing(carga, mesaItem.position.x, mesaItem.position.y, mesaItem.position.z, footprintW, cH, coilLength, hT, lashing, true);
                 }
             }
         } else {
@@ -5827,7 +5982,7 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
             const diameter = tube.diameterMm / 1000 * S;
             const radius = diameter / 2;
             const length = tube.tubeLengthM * S;
-            const deckHeight = tr.tipo === 'reta' ? pH : (isCarreta ? deckY : hT);
+            const deckHeight = isCarreta ? deckY : hT;
             const centerZ = shiftZ - mL / 2;
             const pipeMaterial = mat(0x8795a1, 0.3, 0.78);
             const endMaterial = mat(0x26323b, 0.38, 0.7);
@@ -6143,7 +6298,7 @@ function drawTubeSide2D(ctx, canvas, tr, pos, isCarreta) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     const tube = getTubeMetrics(tr);
-    const deckHeight = tr.tipo === 'reta' ? 1.6 : tr.h;
+    const deckHeight = tr.h;
     const scale = Math.min(
         (canvas.width - 40) / Math.max(tr.mesa, tube.tubeLengthM, 1),
         (canvas.height - 30) / Math.max(deckHeight + tube.stackHeightMm / 1000 + 0.6, 2)
@@ -6214,7 +6369,7 @@ function drawTubeRear2D(ctx, canvas, tr, pos, isCarreta) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     const tube = getTubeMetrics(tr);
-    const deckHeight = tr.tipo === 'reta' ? 1.6 : tr.h;
+    const deckHeight = tr.h;
     const maxWidth = Math.max(tr.w, tube.widthMm / 1000);
     const maxHeight = Math.max(2, tube.heightMm / 1000 + 0.4);
     const scale = Math.min((canvas.width - 36) / maxWidth, (canvas.height - 28) / maxHeight);
@@ -6367,13 +6522,24 @@ function drawSide2D(ctx, canvas, tr, pos, isCarreta) {
         ctx.fillRect(startX - pL, groundY - pH, pL, 0.3*scale); 
         ctx.fillStyle = '#1e293b';
         ctx.fillRect(startX - pL/2 - 0.48*scale, groundY - pH - 0.3*scale, 0.96*scale, 0.3*scale);
+        const landingGear = getPranchaLandingGearGeometry(pH/scale, 0.1);
         const supportX = startX - pL + 0.48*scale;
-        ctx.fillRect(supportX - 0.12*scale, groundY - pH + 0.1*scale, 0.24*scale, pH - 0.86*scale);
-        ctx.fillRect(supportX - 0.08*scale, groundY - 0.86*scale, 0.16*scale, 0.52*scale);
-        ctx.fillRect(supportX - 0.22*scale, groundY - 0.42*scale, 0.44*scale, 0.14*scale);
+        ctx.fillRect(supportX - 0.12*scale, groundY - landingGear.legTop*scale,
+            0.24*scale, (landingGear.legTop-landingGear.legBottom)*scale);
+        const extensionTop = Math.min(0.60, landingGear.legTop);
+        ctx.fillRect(supportX - 0.08*scale, groundY - extensionTop*scale,
+            0.16*scale, (extensionTop-landingGear.legBottom)*scale);
+        ctx.fillRect(supportX - 0.22*scale, groundY - landingGear.footBottom*scale,
+            0.44*scale, landingGear.footHeight*scale);
         ctx.fillStyle = '#475569';
         if (tr.tipo === 'reta') {
-            ctx.fillRect(startX - pL - mL, groundY - pH, mL, 0.3*scale);
+            const neckBottom = pH-0.1*scale;
+            const tableBottom = hT-0.24*scale;
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(startX-pL-0.09*scale,groundY-neckBottom,
+                0.18*scale,neckBottom-tableBottom);
+            ctx.fillStyle = '#475569';
+            ctx.fillRect(startX - pL - mL, groundY - hT, mL, 0.3*scale);
             for (let i=0; i<tr.eixos; i++) drawWheel(startX - pL - mL + 1*scale + (i*1.1*scale));
         } else {
             const dropL = getDeckTransitionLength(tr) * scale;
@@ -6410,7 +6576,7 @@ function drawSide2D(ctx, canvas, tr, pos, isCarreta) {
             const mesaFrontX = startX-pL-getDeckTransitionLength(tr)*scale-mesaOffset*scale;
             const eixoFrontX = startX-pL-getDeckTransitionLength(tr)*scale-(getPranchaAxleArea(tr).start+eixoStartOffset)*scale;
             const eixoBaseY = groundY-getPranchaAxleArea(tr).height*scale-stackBaseHeight*scale;
-            const mesaBaseY = groundY-(tr.tipo==='reta'?pH:hT)-stackBaseHeight*scale;
+            const mesaBaseY = groundY-hT-stackBaseHeight*scale;
 
             for (let i=0;i<grid.pecasNaBase;i++){
                 const r=Math.floor(i/grid.maxCols);
@@ -6423,7 +6589,7 @@ function drawSide2D(ctx, canvas, tr, pos, isCarreta) {
         }
 
         const baseY = (!isCarreta && pos === 'eixos' ? groundY - getPranchaAxleArea(tr).height*scale :
-            (tr.tipo === 'reta' || isCarreta ? groundY - pH : groundY - hT)) -
+            (isCarreta ? groundY - pH : groundY - hT)) -
             stackBaseHeight * scale;
         const currentX = loadFrontX-startOffset*scale;
         
@@ -6459,7 +6625,7 @@ function drawRear2D(ctx, canvas, tr, pos, isCarreta) {
     const rearDeckHeight = tr.tipo === 'caminhao'
         ? tr.h
         : (!isCarreta && pos === 'eixos' ? getPranchaAxleArea(tr).height :
-            (tr.tipo === 'reta' || isCarreta ? 1.6 : tr.h));
+            (tr.tipo === 'reta' ? tr.h : isCarreta ? 1.6 : tr.h));
     const wTotal = Math.max(tr.w, maxW) + 2; 
     const hTotal = Math.max(4.5, rearDeckHeight + (tr.tipo==='sider'?2.8: maxLoadHeight) + 1);
     const scale = Math.min((canvas.width - 20) / wTotal, (canvas.height - 20) / hTotal);

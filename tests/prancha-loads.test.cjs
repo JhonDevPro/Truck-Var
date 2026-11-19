@@ -27,9 +27,9 @@ vm.runInContext(
     section('function positionLoadAllocations', 'const lashingEquipment ='),
     context
 );
-const { getPranchaAxleArea, getLoadSequenceMetrics } = context;
+const { getPranchaAxleArea, getPranchaLandingGearGeometry, getLoadSequenceMetrics } = context;
 const low = { tipo: 'rebaixada', w: 3, h: 0.9, pescoco: 3.6, mesa: 7, eixos: 3, cap: 45 };
-const straight = { ...low, tipo: 'reta', mesa: 12.55 };
+const straight = { ...low, tipo: 'reta', h: 1, mesa: 12.55 };
 const cargo = (comp, type = 'caixa', extra = {}) => ({
     type, comp, larg: 3, alt: 1, peso: 1, qtd: 1, camadas: 1, ...extra
 });
@@ -62,6 +62,7 @@ test('par de bobinas ocupa mesa e eixos e respeita ambas as áreas', () => {
 
 test('na prancha reta a área dos eixos não é contada duas vezes', () => {
     const area = getPranchaAxleArea(straight);
+    assert.equal(area.height, 1);
     const fit = sequence(straight, 'mesa', [cargo(4, 'bobina_frente_2')]);
     assert.equal(fit.loads.length, 1);
     assert.ok(fit.mesaComp <= area.start);
@@ -70,6 +71,12 @@ test('na prancha reta a área dos eixos não é contada duas vezes', () => {
     ]).loads.length, 1);
     assert.equal(context.cargasTransbordo[0].type, 'bobina_frente_2');
     assert.equal(sequence(straight, 'mesa', [cargo(12.55)]).loads.length, 1);
+});
+
+test('pés de desengate ficam acima do chão e abaixo do assoalho do pescoço', () => {
+    const gear = getPranchaLandingGearGeometry(1.58, 0.1);
+    assert.ok(gear.footBottom > 0);
+    assert.ok(gear.legTop < 1.58 - 0.1);
 });
 
 test('as pranchas Step respeitam os comprimentos próprios sobre os eixos', () => {
