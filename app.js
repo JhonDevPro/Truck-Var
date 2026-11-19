@@ -9,7 +9,7 @@ const bdVeiculos = {
     // --- NOVAS PRANCHAS REGISTADAS ---
     "prancha_step_3_eixos": { tipo: "rebaixada", w: 3.20, h: 0.90, pescoco: 3.60, transicao: 1.20, mesa: 7.00, mesaEixos: 3.00, areaCargaTotal: 10.00, compTotal: 15.50, eixos: 3, cap: 45 },
     "prancha_step_4_eixos": { tipo: "rebaixada", w: 3.20, h: 0.90, pescoco: 3.70, transicao: 1.20, mesa: 7.00, mesaEixos: 4.00, areaCargaTotal: 11.00, compTotal: 17.00, eixos: 4, cap: 60 },
-    "prancha_lagartixa": { tipo: "rebaixada", w: 3.00, h: 0.50, pescoco: 3.80, mesa: 14.00, compTotal: 20.00, eixos: 3, cap: 45 },
+    "prancha_lagartixa": { tipo: "rebaixada", w: 3.00, h: 0.50, pescoco: 3.80, mesa: 10.00, compTotal: 20.00, eixos: 3, cap: 45 },
     
     "carreta_ext": { tipo: "carreta_ext", w: 2.50, w_util: 2.44, h: 1.50, pescoco: 0, mesa: 15.00, compTotal: 15.00, eixos: 3, cap: 25 },
     "carreta_bau_15": { tipo: "carreta_bau", w: 2.50, w_util: 2.44, h: 1.50, pescoco: 0, mesa: 15.00, compTotal: 15.00, eixos: 3, cap: 25 },
