@@ -2063,6 +2063,10 @@ function positionLoadAllocations(tr, isCarreta, allocations) {
             carga.qtd === 1 &&
             carga.peso * carga.qtd > tr.cap / 2 &&
             grid.totalComp + grid.gap < tr.mesa / 2;
+        const isHeavyRearLockContainer = isCarreta &&
+            (grid.lockSlotCount === 1 || grid.lockSlotCount === 2) &&
+            isContainerLoad(carga.type) &&
+            carga.peso * carga.qtd > tr.cap * 0.6;
         return [{
             carga,
             originalCarga,
@@ -2071,7 +2075,8 @@ function positionLoadAllocations(tr, isCarreta, allocations) {
             clearance,
             splitCoils,
             coilLength,
-            isConcentrada
+            isConcentrada,
+            isHeavyRearLockContainer
         }];
     });
 
@@ -2083,6 +2088,67 @@ function positionLoadAllocations(tr, isCarreta, allocations) {
         );
         if (hasLockAlignedLoads && !distributedLoads.length && !hasConcentratedNonLockLoad) {
             const { firstStation, stationPitch } = CARRETA_CONTAINER_LOCK_LAYOUT;
+            const heavyRearLockLoads = loads.filter(load => load.isHeavyRearLockContainer);
+            const lockLoads = loads.filter(load => load.grid.lockSlotCount > 0);
+            const requiredLockSlots = lockLoads.reduce(
+                (total, load) => total + load.grid.rows * load.grid.lockSlotCount,
+                0
+            );
+            const availableLockSlots = CARRETA_CONTAINER_LOCK_LAYOUT.stationCount - 1;
+            if (heavyRearLockLoads.length && requiredLockSlots <= availableLockSlots) {
+                const regularLockLoads = lockLoads.filter(load => !load.isHeavyRearLockContainer);
+                const positionAtLockSlot = (load, slotIndex) => {
+                    const lockGap = load.grid.lockSlotSpan - load.carga.comp;
+                    load.startOffset = firstStation + slotIndex * stationPitch + lockGap / 2;
+                    load.grid.gap = lockGap;
+                    load.grid.totalComp = load.grid.rows * load.grid.lockSlotSpan - lockGap / 2;
+                };
+                let frontSlotIndex = 0;
+                regularLockLoads.forEach(load => {
+                    positionAtLockSlot(load, frontSlotIndex);
+                    frontSlotIndex += load.grid.rows * load.grid.lockSlotCount;
+                });
+                let rearSlotIndex = availableLockSlots;
+                heavyRearLockLoads.slice().reverse().forEach(load => {
+                    const requiredSlots = load.grid.rows * load.grid.lockSlotCount;
+                    rearSlotIndex -= requiredSlots;
+                    positionAtLockSlot(load, rearSlotIndex);
+                });
+
+                const rearLockStart = firstStation + rearSlotIndex * stationPitch;
+                const rearLockEnd = firstStation + availableLockSlots * stationPitch;
+                const positionedLoadsByIndex = new Map(
+                    lockLoads.map(load => [load.compositionIndex, load])
+                );
+                let cargoCursor = firstStation + frontSlotIndex * stationPitch;
+                loads.filter(load => !load.grid.lockSlotCount).forEach(load => {
+                    const previousLoad = load.carga.colocarSobreAnterior &&
+                        allocations[load.compositionIndex - 1] > 0
+                        ? positionedLoadsByIndex.get(load.compositionIndex - 1)
+                        : null;
+                    if (previousLoad) {
+                        load.startOffset = previousLoad.startOffset;
+                        positionedLoadsByIndex.set(load.compositionIndex, load);
+                        return;
+                    }
+
+                    let startOffset = Math.max(cargoCursor, load.clearance);
+                    if (startOffset + load.grid.totalComp + load.grid.gap > rearLockStart + 1e-9) {
+                        startOffset = Math.max(rearLockEnd, startOffset);
+                    }
+                    load.startOffset = startOffset;
+                    cargoCursor = startOffset + load.grid.totalComp + load.grid.gap;
+                    positionedLoadsByIndex.set(load.compositionIndex, load);
+                });
+
+                applyStackingPositions(loads, allocations);
+                const mesaComp = loads.reduce(
+                    (maxEnd, load) => Math.max(maxEnd, load.startOffset + load.grid.totalComp),
+                    0
+                );
+                return { loads, totalComp: mesaComp, mesaComp, eixoComp: 0, allocations };
+            }
+
             const positionedLoadsByIndex = new Map();
             let occupiedEnd = 0;
             loads.forEach(load => {

@@ -50,8 +50,8 @@ vm.runInContext(
 );
 
 const trailer = (length = 14) => ({ tipo: 'carreta', mesa: length, w: 2.5, cap: 25, eixos: 3 });
-const cargo = (type, comp, qtd = 1) => ({
-    type, comp, larg: 2.4, alt: 2.4, peso: 2.5, qtd, camadas: 1
+const cargo = (type, comp, qtd = 1, peso = 2.5) => ({
+    type, comp, larg: 2.4, alt: 2.4, peso, qtd, camadas: 1
 });
 function position(tr, loads) {
     context.composicaoCargas = loads;
@@ -95,6 +95,24 @@ test('dois containers de 20 pés e a combinação de 10 + 20 pés seguem os lock
     const mixed = position(trailer(), [
         cargo('container_10', 3.05, 2),
         cargo('container_dry_20', 5.896)
+    ]).loads;
+    assert.equal(mixed[0].startOffset, 1.4);
+    assert.ok(Math.abs(mixed[1].startOffset - 7.602) < 1e-9);
+});
+
+test('containers de 10 e 20 pés acima de 60% da capacidade ocupam os locks traseiros', () => {
+    const heavy20 = position(trailer(), [cargo('container_dry_20', 5.896, 1, 16)]).loads[0];
+    assert.ok(Math.abs(heavy20.startOffset - 7.602) < 1e-9);
+
+    const heavy10 = position(trailer(), [cargo('container_10', 3.05, 1, 16)]).loads[0];
+    assert.ok(Math.abs(heavy10.startOffset - 10.55) < 1e-9);
+
+    const atThreshold = position(trailer(), [cargo('container_10', 3.05, 1, 15)]).loads[0];
+    assert.equal(atThreshold.startOffset, 1.4);
+
+    const mixed = position(trailer(), [
+        cargo('container_10', 3.05),
+        cargo('container_dry_20', 5.896, 1, 16)
     ]).loads;
     assert.equal(mixed[0].startOffset, 1.4);
     assert.ok(Math.abs(mixed[1].startOffset - 7.602) < 1e-9);
