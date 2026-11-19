@@ -541,6 +541,7 @@ function loadGeneralCargo(type) {
 const CONTAINER_LOAD_TYPES = new Set(LOAD_TYPES
     .filter(({ value }) => value.startsWith('container_'))
     .map(({ value }) => value));
+const DEFAULT_UNIT_DIMENSION_LOAD_TYPES = new Set(['caixa', 'caixa_metalica', 'palete_caixas']);
 const OPEN_TOP_LOAD_TYPES = new Set([
     'container_20', 'container_40',
     'container_10', 'container_baby'
@@ -766,7 +767,7 @@ function getGeneralCargoPreset(file) {
         const preset = LOAD_TYPES.find(type => type.value === `container_dry_${size}`).preset;
         return { comp: preset[0], larg: preset[1], alt: preset[2] };
     }
-    if (/palet|pallet/i.test(file)) return { comp: 1.2, larg: 1.2, alt: 1.4, peso: 0.1 };
+    if (/palet|pallet|box|carton|caixa/i.test(file)) return { comp: 1, larg: 1, alt: 1 };
     return null;
 }
 
@@ -784,13 +785,12 @@ generalCargo.model.addEventListener('change', () => {
     const model = generalCargoByType.get(generalCargo.model.value);
     if (!model) return;
     const preset = getGeneralCargoPreset(model.file);
-    if (!preset) return;
-    generalCargo.comp.value = formatDimensionInput(preset.comp);
-    generalCargo.larg.value = formatDimensionInput(preset.larg);
-    generalCargo.alt.value = formatDimensionInput(preset.alt);
-    if (preset.peso !== undefined) {
-        generalCargo.peso.value = weightForInput(preset.peso, generalCargo.pesoUnit.value);
+    if (preset) {
+        generalCargo.comp.value = formatDimensionInput(preset.comp);
+        generalCargo.larg.value = formatDimensionInput(preset.larg);
+        generalCargo.alt.value = formatDimensionInput(preset.alt);
     }
+    generalCargo.peso.value = weightForInput(isContainerLoad(model.value) ? 2.5 : 0.1, generalCargo.pesoUnit.value);
 });
 
 const tubeInputs = {
@@ -6479,12 +6479,17 @@ tipoCargaSelect.addEventListener('change', () => {
 
     const loadType = LOAD_TYPES.find(type => type.value === val);
     if (loadType) {
-        const preset = loadType.preset;
-        [inputs.cComp, inputs.cLarg, inputs.cAlt].forEach((el,i) => el.value = formatDimensionInput(preset[i]));
+        const dimensions = isContainerLoad(val)
+            ? loadType.preset.slice(0, 3)
+            : DEFAULT_UNIT_DIMENSION_LOAD_TYPES.has(val) ? [1, 1, 1] : ['', '', ''];
+        [inputs.cComp, inputs.cLarg, inputs.cAlt].forEach((el, i) => {
+            el.value = dimensions[i] === '' ? '' : formatDimensionInput(dimensions[i]);
+        });
         inputs.cRotacao.value = '0';
-        inputs.cPeso.value = weightForInput(preset[3], inputs.cPesoUnit.value);
+        inputs.cPeso.value = weightForInput(isContainerLoad(val) ? 2.5 : 0.1, inputs.cPesoUnit.value);
     }
 });
+if (tipoCargaSelect.value) tipoCargaSelect.dispatchEvent(new Event('change'));
 
 els.btnReset.addEventListener('click', () => {
     composicaoCargas = [];
