@@ -3915,14 +3915,52 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
     const blueDark = mat(0x004085);
     const blueTampas = mat(0x0056b3);
     const white = mat(0xf8fafc);
-    const deckBase = mat(0x929ca6,0.62,0.32);
+    const deckBase = mat(0x0f172a,0.62,0.32);
     const glass = mat(0x0a0a0a);
     const rubber = mat(0x111111);
     const rim = mat(0x475569);
     const frame = mat(0x0f172a);
     const steel = mat(0x1e293b);
     const wood = mat(0xd4a373);
-    const neckWood = mat(0xa8794e);
+    const createDeckWoodMaterial = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 1024;
+        canvas.height = 512;
+        const context = canvas.getContext('2d');
+        if (!context) throw new Error('Não foi possível criar a textura de madeira do assoalho.');
+        const boardColors = ['#d9b17d', '#d2a570', '#ddb883', '#d5aa74', '#dcb47f', '#d6ab76', '#dfb985', '#d1a26f', '#d9af7a', '#d4a875'];
+        const boardWidth = canvas.width / boardColors.length;
+        boardColors.forEach((color, index) => {
+            const left = Math.round(index * boardWidth);
+            const right = Math.round((index + 1) * boardWidth);
+            context.fillStyle = color;
+            context.fillRect(left, 0, right - left, canvas.height);
+            for (let grain = 0; grain < 4; grain++) {
+                const x = left + boardWidth * (0.18 + grain * 0.19);
+                context.strokeStyle = grain % 2 === 0 ? 'rgba(112, 73, 42, 0.12)' : 'rgba(255, 232, 190, 0.18)';
+                context.lineWidth = 2;
+                context.beginPath();
+                context.moveTo(x, 0);
+                context.bezierCurveTo(x - 3, canvas.height * 0.3, x + 3, canvas.height * 0.7, x, canvas.height);
+                context.stroke();
+            }
+            context.fillStyle = 'rgba(91, 61, 38, 0.72)';
+            context.fillRect(right - 3, 0, 3, canvas.height);
+        });
+        const texture = new THREE.CanvasTexture(canvas);
+        if (comparison) comparison.textures.push(texture);
+        const material = wood.clone();
+        material.map = texture;
+        material.color.setHex(0xffffff);
+        material.roughness = 0.88;
+        material.userData.ownedTexture = texture;
+        material.needsUpdate = true;
+        return material;
+    };
+    const deckWood = createDeckWoodMaterial();
+    const neckDeckWood = deckWood.clone();
+    neckDeckWood.color.setHex(0xd8c6ae);
+    delete neckDeckWood.userData.ownedTexture;
     const siderMat = matTransp(0x1e293b, 0.88);
     siderMat.depthWrite = false;
     
@@ -3970,6 +4008,11 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
         m.receiveShadow = true;
         group.add(m);
         return m;
+    }
+
+    function drawWoodDeckSegment(width, thickness, length, x, centerY, centerZ, sideMaterial, topMaterial=deckWood) {
+        const materials = [sideMaterial, sideMaterial, topMaterial, sideMaterial, sideMaterial, sideMaterial];
+        return mesh(new THREE.BoxGeometry(width, thickness, length), materials, x, centerY, centerZ);
     }
     
     function drawStripedBumper(w, h, d, x, y, z, segments=6, group=trailerGroup) {
@@ -4056,43 +4099,13 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
         return tire;
     }
 
-    function drawDeckDetails(width,length,centerZ,topY,includeStructure=true,plankMaterial=wood) {
-        if (includeStructure) {
-            const sideBeam = mat(0x26384e,0.48,0.62);
-            const crossBeam = mat(0x334155,0.5,0.58);
-            const plankCount = 10;
-            const plankWidth = width*0.9/plankCount;
-            const plankLength = length*0.975;
-
-            box(width*0.98,0.12*S,length*0.98,sideBeam,0,topY-0.18*S,centerZ);
-            [-1,1].forEach(side=>{
-                box(0.12*S,0.2*S,length,sideBeam,side*(width/2-0.08*S),topY-0.08*S,centerZ);
-            });
-
-            for (let i=0;i<plankCount;i++){
-                const x = -width*0.45+plankWidth*(i+0.5);
-                box(plankWidth*0.97,0.035*S,plankLength,plankMaterial,x,topY+0.018*S,centerZ);
-            }
-
-            const beamCount = Math.max(4,Math.min(18,Math.ceil(length/(0.55*S))));
-            for (let i=0;i<=beamCount;i++){
-                const z = centerZ-length/2+length*i/beamCount;
-                box(width*1.04,0.1*S,0.1*S,crossBeam,0,topY-0.23*S,z);
-            }
-        } else {
-            const plankCount = 10;
-            const plankWidth = width*0.9/plankCount;
-            for (let i=0;i<plankCount;i++){
-                const x = -width*0.45+plankWidth*(i+0.5);
-                box(plankWidth*0.98,0.035*S,length*0.975,plankMaterial,x,topY+0.025*S,centerZ);
-            }
-        }
-
+    function drawDeckDetails(width,length,centerZ,deckTopY) {
+        const detailTopY = deckTopY - 0.0425*S;
         const reflectorCount = Math.max(4,Math.min(24,Math.floor(length/(0.55*S))));
         for (let i=0;i<=reflectorCount;i++){
             const z = centerZ-length/2+length*i/reflectorCount;
             [-1,1].forEach(side=>{
-                box(0.06*S,0.12*S,0.2*S,i%2===0?bumperWhite:bumperRed,side*(width/2+0.015*S),topY-0.12*S,z);
+                box(0.06*S,0.12*S,0.2*S,i%2===0?bumperWhite:bumperRed,side*(width/2+0.015*S),detailTopY-0.12*S,z);
             });
         }
 
@@ -4100,10 +4113,19 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
         for (let i=0;i<=tieDownCount;i++){
             const z = centerZ-length/2+length*i/tieDownCount;
             [-1,1].forEach(side=>{
-                box(0.16*S,0.06*S,0.08*S,steel,side*(width/2-0.12*S),topY+0.035*S,z);
-                box(0.045*S,0.12*S,0.08*S,steel,side*(width/2-0.12*S),topY+0.08*S,z);
+                box(0.16*S,0.06*S,0.08*S,steel,side*(width/2-0.12*S),detailTopY+0.035*S,z);
+                box(0.045*S,0.12*S,0.08*S,steel,side*(width/2-0.12*S),detailTopY+0.08*S,z);
             });
         }
+    }
+
+    function drawNeckChassis(width,length,centerZ,deckTopY) {
+        const railWidth = 0.1*S;
+        const railHeight = 0.26*S;
+        const railY = deckTopY - railHeight/2 - 0.1*S;
+        [-1,1].forEach(side => {
+            box(railWidth,railHeight,length+0.2*S,frame,side*(width/2-railWidth/2),railY,centerZ);
+        });
     }
 
     function drawTrailerSideboardDetails(width,length,deckY,height,thickness,centerZ,includeSides) {
@@ -4146,8 +4168,8 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
     }
 
     function drawStraightSuspension(width,deckY,length,centerZ,axleY,axlePositions) {
-        const chassisMat = mat(0x26384e,0.48,0.62);
-        const suspensionMat = mat(0x475569,0.5,0.58);
+        const chassisMat = frame;
+        const suspensionMat = frame;
         const beamOffset = Math.min(width*0.2,0.62*S);
         const beamY = deckY-0.36*S;
 
@@ -4314,8 +4336,7 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
         const deckCenterZ = -mL/2 + shiftZ;
         const cabLength = (tr.cabL ?? 2) * S;
         const cabHeight = (tr.cabH ?? 2.5) * S;
-        box(wT, .24*S, mL, frame, 0, deckY - .12*S, deckCenterZ);
-        box(wT*.94, .045*S, mL*.96, wood, 0, deckY + .02*S, deckCenterZ);
+        drawWoodDeckSegment(wT,.24*S,mL,0,deckY-.12*S,deckCenterZ,frame);
         box(wT*.98, cabHeight - deckY + .24*S, cabLength, white, 0, (cabHeight + deckY - .24*S)/2, shiftZ + cabLength/2 + .05*S);
         const wheelRadius = (tr.wheelR ?? .5) * S;
         const wheelZs = [shiftZ + cabLength*.55];
@@ -4672,8 +4693,7 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
         modelPromises.push(promise);
     }
 
-    const deckMat=usesChassisModel ? white : frame;
-    const woodMat=wood;
+    const deckMat=deckBase;
 
     if (isRigidTruck) {
         // A carroceria vem do modelo 3D; tampas e sinalização são desenhadas aqui.
@@ -4681,9 +4701,10 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
     } else if (isCarreta) {
         rearStart += shiftZ;
         const deckCenterZ=-mL/2+shiftZ;
-        box(wT,.24*S,mL,usesChassisModel?deckBase:deckMat,0,deckY-.12*S,deckCenterZ);
-        box(wT*.94,.045*S,mL*.96,woodMat,0,deckY+.02*S,deckCenterZ);
-        drawDeckDetails(wT,mL,deckCenterZ,deckY+0.045*S,!usesChassisModel);
+        const deckTopY = deckY + (usesChassisModel ? 0.002*S : 0);
+        const deckSideMaterial = usesChassisModel ? deckBase : deckMat;
+        drawWoodDeckSegment(wT,0.24*S,mL,0,deckTopY-0.12*S,deckCenterZ,deckSideMaterial);
+        drawDeckDetails(wT,mL,deckCenterZ,deckTopY);
         const axleLayout = getCarretaAxleLayout(tr);
         const startAxleZ = rearStart + axleLayout.firstFromRear*S;
         
@@ -4837,11 +4858,11 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
     } else {
         const dropL = getDeckTransitionLength(tr)*S;
         
-        box(0.15*S, 0.3*S, pL, frame, -0.4*S, pH-0.15*S, -pL/2 + shiftZ);
-        box(0.15*S, 0.3*S, pL, frame, 0.4*S, pH-0.15*S, -pL/2 + shiftZ);
-        box(wT, 0.1*S, pL, deckMat, 0, pH-0.05*S, -pL/2 + shiftZ);
-        box(wT*.9, 0.04*S, pL*.96, neckWood, 0, pH+0.02*S, -pL/2 + shiftZ);
-        drawDeckDetails(wT,pL,-pL/2+shiftZ,pH+0.045*S,true,neckWood);
+        box(0.15*S,0.3*S,pL,frame,-0.4*S,pH-0.25*S,-pL/2+shiftZ);
+        box(0.15*S,0.3*S,pL,frame,0.4*S,pH-0.25*S,-pL/2+shiftZ);
+        drawWoodDeckSegment(wT,0.1*S,pL,0,pH-0.05*S,-pL/2+shiftZ,deckMat,neckDeckWood);
+        drawNeckChassis(wT,pL,-pL/2+shiftZ,pH);
+        drawDeckDetails(wT,pL,-pL/2+shiftZ,pH);
 
         const spare = new THREE.Group();
         spare.name = 'estepe';
@@ -4867,30 +4888,27 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
         });
         
         if (tr.tipo==='reta'){
-            box(wT, 0.24*S, mL, deckMat, 0, pH-0.12*S, -pL-mL/2 + shiftZ);
-            box(wT*.9, 0.045*S, mL*.96, woodMat, 0, pH+0.02*S, -pL-mL/2 + shiftZ);
-            drawDeckDetails(wT,mL,-pL-mL/2+shiftZ,pH+0.045*S);
+            drawWoodDeckSegment(wT,0.24*S,mL,0,pH-0.12*S,-pL-mL/2+shiftZ,deckMat);
+            drawDeckDetails(wT,mL,-pL-mL/2+shiftZ,pH);
         } else {
             const dy = pH - hT;
             const rampL = Math.hypot(dropL, dy);
-            const ramp = box(wT, 0.24*S, rampL, deckMat, 0, (pH+hT)/2 - 0.12*S, -pL - dropL/2 + shiftZ);
+            const ramp = box(wT,0.24*S,rampL,frame,0,(pH+hT)/2-0.12*S,-pL-dropL/2+shiftZ);
             ramp.rotation.x = -Math.atan2(dy, dropL);
             
-            box(wT, 0.24*S, mL, deckMat, 0, hT - 0.12*S, -pL - dropL - mL/2 + shiftZ);
-            box(wT*.9, 0.045*S, mL*.96, woodMat, 0, hT + 0.02*S, -pL - dropL - mL/2 + shiftZ); 
-            drawDeckDetails(wT,mL,-pL-dropL-mL/2+shiftZ,hT+0.045*S);
+            drawWoodDeckSegment(wT,0.24*S,mL,0,hT-0.12*S,-pL-dropL-mL/2+shiftZ,deckMat);
+            drawDeckDetails(wT,mL,-pL-dropL-mL/2+shiftZ,hT);
             
             const rearDrop = 0.8*S;
             const rearDy = 0.2*S; 
-            const back = box(wT, 0.24*S, Math.hypot(rearDrop, rearDy), deckMat, 0, hT + rearDy/2 - 0.12*S, -pL - dropL - mL - rearDrop/2 + shiftZ);
+            const back = box(wT,0.24*S,Math.hypot(rearDrop,rearDy),frame,0,hT+rearDy/2-0.12*S,-pL-dropL-mL-rearDrop/2+shiftZ);
             back.rotation.x = Math.atan2(rearDy, rearDrop);
             
             const axleDeckLength = getPranchaAxleArea(tr).length * S;
             const axleDeckY = hT + rearDy;
             const axleDeckCenterZ = rearEnd + shiftZ + axleDeckLength/2;
-            box(wT, 0.24*S, axleDeckLength, deckMat, 0, axleDeckY - 0.12*S, axleDeckCenterZ);
-            box(wT*.9, 0.045*S, axleDeckLength*.96, woodMat, 0, axleDeckY + 0.02*S, axleDeckCenterZ);
-            drawDeckDetails(wT,axleDeckLength,axleDeckCenterZ,axleDeckY+0.045*S);
+            drawWoodDeckSegment(wT,0.24*S,axleDeckLength,0,axleDeckY-0.12*S,axleDeckCenterZ,deckMat);
+            drawDeckDetails(wT,axleDeckLength,axleDeckCenterZ,axleDeckY);
         }
         const axleY=.49*S;
         const axlePositions=[];
@@ -5034,7 +5052,7 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
         const footprintL = Math.max(.1, carga.comp) * S;
         
         const loadDeckY = !isCarreta && pos === 'eixos' && tr.tipo !== 'reta'
-            ? getPranchaAxleArea(tr).height*S : (tr.tipo === 'reta' ? pH : (isCarreta ? deckY : hT));
+            ? getPranchaAxleArea(tr).height*S : (tr.tipo === 'reta' ? pH : (isCarreta ? deckY + (usesChassisModel ? 0.002*S : 0) : hT));
         const loadY = loadDeckY +
             stackBaseHeight * S + cH/2;
         const loadZ_start = loadFrontZ-startOffset*S;
