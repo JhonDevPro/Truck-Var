@@ -212,6 +212,8 @@ const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_5jfnHsWZfVxxrunMdYPK-g_7njfoMnD
 let composicaoCargas = [];
 let cargasTransbordo = [];
 let editingCargaIndex = null;
+let editingCargoRotationBefore;
+let editingCargoRotationPreviewed = false;
 let activeCargaTab = 'cargas';
 let tubeInputUpdateTimer = null;
 let tubeStrappingEnabled = true;
@@ -409,6 +411,11 @@ const GENERAL_CARGO_TYPES = GENERAL_CARGO_FILES.map(file => ({
 }));
 const generalCargoByType = new Map(GENERAL_CARGO_TYPES.map(type => [type.value, type]));
 const generalCargoPromises = new Map();
+const CARGO_ORIENTATIONS = [0, 90, 180, 270];
+// The GLB uses generated mesh names; these identify its tank shell.
+const SMALL_FLUID_CONTAINER_TANK_MESHES = new Set([
+    'Object_2', 'Object_4', 'Object_6', 'Object_13', 'Object_24', 'Object_35'
+]);
 
 // Models measured as too dark under the application's existing scene lighting.
 const GENERAL_CARGO_DARK_MODELS = new Set([
@@ -490,6 +497,18 @@ function loadGeneralCargo(type) {
                             child.userData.sharedResource = true;
                             child.castShadow = true;
                             child.receiveShadow = true;
+                            if (model.file === 'small_fluid_container.glb') {
+                                const isTankShell = SMALL_FLUID_CONTAINER_TANK_MESHES.has(child.name);
+                                const materials = Array.isArray(child.material) ? child.material : [child.material];
+                                const recoloredMaterials = materials.map(material => {
+                                    const recolored = material.clone();
+                                    recolored.color.setHex(isTankShell ? 0x8c969f : 0xf2f2f0);
+                                    recolored.metalness = isTankShell ? 0.35 : 0;
+                                    recolored.roughness = isTankShell ? 0.38 : 0.6;
+                                    return recolored;
+                                });
+                                child.material = Array.isArray(child.material) ? recoloredMaterials : recoloredMaterials[0];
+                            }
                             if (GENERAL_CARGO_DARK_MODELS.has(model.file)) {
                                 const materials = Array.isArray(child.material) ? child.material : [child.material];
                                 materials.forEach(material => darkMaterials.add(material));
@@ -599,6 +618,7 @@ const inputs = {
     cComp: document.getElementById('input_carga_comp'),
     cLarg: document.getElementById('input_carga_largura'),
     cAlt: document.getElementById('input_carga_altura'),
+    cRotacao: document.getElementById('input_carga_rotacao'),
     cPeso: document.getElementById('input_carga_peso'),
     cPesoUnit: document.getElementById('input_carga_peso_unit'),
     cQtd: document.getElementById('input_carga_qtd'),
@@ -658,6 +678,7 @@ const generalCargo = {
     comp: document.getElementById('general_cargo_length'),
     larg: document.getElementById('general_cargo_width'),
     alt: document.getElementById('general_cargo_height'),
+    rotacao: document.getElementById('general_cargo_rotation'),
     peso: document.getElementById('general_cargo_weight'),
     pesoUnit: document.getElementById('general_cargo_weight_unit'),
     qtd: document.getElementById('general_cargo_quantity'),
@@ -666,6 +687,56 @@ const generalCargo = {
     add: document.getElementById('general_cargo_add'),
     cancel: document.getElementById('general_cargo_cancel')
 };
+
+function getCargoRotation(carga) {
+    const rotation = Number(carga.rotacao ?? 0);
+    return CARGO_ORIENTATIONS.includes(rotation) ? rotation : 0;
+}
+
+function isValidCargoRotation(rotation) {
+    return rotation === undefined ||
+        (typeof rotation === 'number' && CARGO_ORIENTATIONS.includes(rotation)) ||
+        (typeof rotation === 'string' && rotation.trim() !== '' && CARGO_ORIENTATIONS.includes(Number(rotation)));
+}
+
+function getOrientedCargoDimensions(carga) {
+    return getCargoRotation(carga) % 180 === 90
+        ? { comp: carga.larg, larg: carga.comp }
+        : { comp: carga.comp, larg: carga.larg };
+}
+
+function parseDecimalValue(value) {
+    const text = String(value).trim();
+    if (!/^(?:\d+(?:[.,]\d*)?|[.,]\d+)$/.test(text)) return NaN;
+    return Number(text.replace(',', '.'));
+}
+
+function readDimensionInput(input) {
+    const value = parseDecimalValue(input.value);
+    input.setCustomValidity(Number.isFinite(value) && value >= 0.1
+        ? ''
+        : 'Informe uma medida de pelo menos 0,1 m usando vírgula ou ponto decimal.');
+    return value;
+}
+
+function formatDimensionInput(value) {
+    const number = parseDecimalValue(value);
+    return Number.isFinite(number)
+        ? number.toLocaleString('pt-BR', { useGrouping: false, maximumFractionDigits: 6 })
+        : '';
+}
+
+function formatDimensionDisplay(value) {
+    return Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+}
+
+const cargoDimensionInputs = [
+    inputs.cComp, inputs.cLarg, inputs.cAlt,
+    generalCargo.comp, generalCargo.larg, generalCargo.alt
+];
+cargoDimensionInputs.forEach(input => {
+    input.addEventListener('input', () => readDimensionInput(input));
+});
 
 function weightInTonnes(value, unit) {
     return unit === 'kg' ? Number(value) / 1000 : Number(value);
@@ -709,13 +780,14 @@ generalCargo.model.addEventListener('change', () => {
     [generalCargo.comp, generalCargo.larg, generalCargo.alt, generalCargo.peso].forEach(input => {
         input.value = '';
     });
+    generalCargo.rotacao.value = '0';
     const model = generalCargoByType.get(generalCargo.model.value);
     if (!model) return;
     const preset = getGeneralCargoPreset(model.file);
     if (!preset) return;
-    generalCargo.comp.value = preset.comp;
-    generalCargo.larg.value = preset.larg;
-    generalCargo.alt.value = preset.alt;
+    generalCargo.comp.value = formatDimensionInput(preset.comp);
+    generalCargo.larg.value = formatDimensionInput(preset.larg);
+    generalCargo.alt.value = formatDimensionInput(preset.alt);
     if (preset.peso !== undefined) {
         generalCargo.peso.value = weightForInput(preset.peso, generalCargo.pesoUnit.value);
     }
@@ -1853,7 +1925,12 @@ function positionLoadAllocations(tr, isCarreta, allocations) {
     const loads = composicaoCargas.flatMap((originalCarga, index) => {
         const qtdAlocada = allocations[index] || 0;
         if (qtdAlocada <= 0) return [];
-        const carga = { ...originalCarga, qtd: qtdAlocada, qtdAlocada };
+        const carga = {
+            ...originalCarga,
+            ...getOrientedCargoDimensions(originalCarga),
+            qtd: qtdAlocada,
+            qtdAlocada
+        };
         const splitCoils = !isCarreta && tr.pescoco > 0 &&
             (carga.type === 'bobina_lado_2' || carga.type === 'bobina_frente_2');
         const clearance = getLoadStartClearance(carga.type, tr);
@@ -2384,7 +2461,7 @@ function renderListaCargas() {
         editButton.setAttribute('aria-label', `Editar ${carga.qtd} ${typeLabel}`);
         editButton.innerHTML = `
             <span class="font-bold text-slate-700">${carga.qtd}x ${typeLabel}</span>
-            <span class="text-slate-500">${carga.comp.toFixed(1)}m x ${carga.larg.toFixed(1)}m x ${carga.alt.toFixed(1)}m &bull; ${carga.camadas || 1} camada(s)${carga.colocarSobreAnterior ? ' &bull; sobre a anterior' : ''} &bull; ${weightForInput(carga.peso, weightUnit)} ${weightUnit}/unid</span>
+            <span class="text-slate-500">${formatDimensionDisplay(carga.comp)}m x ${formatDimensionDisplay(carga.larg)}m x ${formatDimensionDisplay(carga.alt)}m &bull; ${getCargoRotation(carga)}° &bull; ${carga.camadas || 1} camada(s)${carga.colocarSobreAnterior ? ' &bull; sobre a anterior' : ''} &bull; ${weightForInput(carga.peso, weightUnit)} ${weightUnit}/unid</span>
         `;
         editButton.addEventListener('click', () => editarCarga(index));
 
@@ -2410,22 +2487,34 @@ function atualizarBotaoCarga() {
 }
 
 function cancelarEdicaoCarga() {
+    const carga = composicaoCargas[editingCargaIndex];
+    if (editingCargoRotationPreviewed && carga) {
+        if (editingCargoRotationBefore === undefined) delete carga.rotacao;
+        else carga.rotacao = editingCargoRotationBefore;
+        analyzeAndDraw();
+    }
     editingCargaIndex = null;
+    editingCargoRotationBefore = undefined;
+    editingCargoRotationPreviewed = false;
     atualizarBotaoCarga();
     renderListaCargas();
 }
 
 function editarCarga(index) {
+    if (editingCargaIndex !== null) cancelarEdicaoCarga();
     const carga = composicaoCargas[index];
     if (!carga) return;
 
     if (generalCargoByType.has(carga.type)) {
         setCargaTab('gerais');
         editingCargaIndex = index;
+        editingCargoRotationBefore = carga.rotacao;
+        editingCargoRotationPreviewed = false;
         generalCargo.model.value = carga.type;
-        generalCargo.comp.value = carga.comp;
-        generalCargo.larg.value = carga.larg;
-        generalCargo.alt.value = carga.alt;
+        generalCargo.comp.value = formatDimensionInput(carga.comp);
+        generalCargo.larg.value = formatDimensionInput(carga.larg);
+        generalCargo.alt.value = formatDimensionInput(carga.alt);
+        generalCargo.rotacao.value = String(getCargoRotation(carga));
         generalCargo.peso.value = weightForInput(carga.peso, generalCargo.pesoUnit.value);
         generalCargo.qtd.value = carga.qtd;
         generalCargo.camadas.value = carga.camadas || 1;
@@ -2437,11 +2526,14 @@ function editarCarga(index) {
     }
     setCargaTab('cargas');
     editingCargaIndex = index;
+    editingCargoRotationBefore = carga.rotacao;
+    editingCargoRotationPreviewed = false;
     tipoCargaSelect.value = carga.type;
     tipoCargaSelect.dispatchEvent(new Event('change'));
-    inputs.cComp.value = carga.comp;
-    inputs.cLarg.value = carga.larg;
-    inputs.cAlt.value = carga.alt;
+    inputs.cComp.value = formatDimensionInput(carga.comp);
+    inputs.cLarg.value = formatDimensionInput(carga.larg);
+    inputs.cAlt.value = formatDimensionInput(carga.alt);
+    inputs.cRotacao.value = String(getCargoRotation(carga));
     inputs.cPeso.value = weightForInput(carga.peso, inputs.cPesoUnit.value);
     inputs.cQtd.value = carga.qtd;
     inputs.cCamadas.value = carga.camadas || 1;
@@ -2456,6 +2548,8 @@ window.removerCarga = function(index) {
     composicaoCargas.splice(index, 1);
     if (editingCargaIndex === index) {
         editingCargaIndex = null;
+        editingCargoRotationBefore = undefined;
+        editingCargoRotationPreviewed = false;
         atualizarBotaoCarga();
     } else if (editingCargaIndex !== null && editingCargaIndex > index) {
         editingCargaIndex--;
@@ -2464,10 +2558,29 @@ window.removerCarga = function(index) {
     analyzeAndDraw();
 };
 
+function previewEditedCargoRotation(input) {
+    if (editingCargaIndex === null) return;
+    const carga = composicaoCargas[editingCargaIndex];
+    const rotation = Number(input.value);
+    if (!carga || !CARGO_ORIENTATIONS.includes(rotation) || getCargoRotation(carga) === rotation) return;
+
+    carga.rotacao = rotation;
+    editingCargoRotationPreviewed = true;
+    renderListaCargas();
+    analyzeAndDraw();
+}
+
+inputs.cRotacao.addEventListener('change', () => previewEditedCargoRotation(inputs.cRotacao));
+generalCargo.rotacao.addEventListener('change', () => previewEditedCargoRotation(generalCargo.rotacao));
+
 els.btnAdicionar.addEventListener('click', () => {
-    const comp = parseFloat(inputs.cComp.value) || 0.1;
-    const larg = parseFloat(inputs.cLarg.value) || 0.1;
-    const alt = parseFloat(inputs.cAlt.value) || 0.1;
+    const dimensionInputs = [inputs.cComp, inputs.cLarg, inputs.cAlt];
+    const [comp, larg, alt] = dimensionInputs.map(readDimensionInput);
+    const invalidDimension = dimensionInputs.find(input => !input.checkValidity());
+    if (invalidDimension) {
+        invalidDimension.reportValidity();
+        return;
+    }
     const peso = weightInTonnes(inputs.cPeso.value, inputs.cPesoUnit.value);
     const qtd = parseInt(inputs.cQtd.value) || 1;
     const camadas = Math.max(1, Number.parseInt(inputs.cCamadas.value, 10) || 1);
@@ -2475,7 +2588,10 @@ els.btnAdicionar.addEventListener('click', () => {
     const type = document.getElementById('input_tipo_carga').value;
     const armador = document.getElementById('input_armador').value;
 
-    const cargaAtualizada = { comp, larg, alt, peso, type, armador, qtd, camadas, colocarSobreAnterior };
+    const cargaAtualizada = {
+        comp, larg, alt, peso, type, armador, qtd, camadas, colocarSobreAnterior,
+        rotacao: Number(inputs.cRotacao.value)
+    };
     if (editingCargaIndex !== null && composicaoCargas[editingCargaIndex].lashing) {
         cargaAtualizada.lashing = composicaoCargas[editingCargaIndex].lashing;
     }
@@ -2484,6 +2600,8 @@ els.btnAdicionar.addEventListener('click', () => {
     } else {
         composicaoCargas[editingCargaIndex] = cargaAtualizada;
         editingCargaIndex = null;
+        editingCargoRotationBefore = undefined;
+        editingCargoRotationPreviewed = false;
         atualizarBotaoCarga();
     }
     
@@ -2493,16 +2611,18 @@ els.btnAdicionar.addEventListener('click', () => {
 
 generalCargo.form.addEventListener('submit', event => {
     event.preventDefault();
+    const [comp, larg, alt] = [generalCargo.comp, generalCargo.larg, generalCargo.alt].map(readDimensionInput);
     if (!generalCargo.form.reportValidity() || !generalCargoByType.has(generalCargo.model.value)) return;
     const carga = {
         type: generalCargo.model.value,
-        comp: Number(generalCargo.comp.value),
-        larg: Number(generalCargo.larg.value),
-        alt: Number(generalCargo.alt.value),
+        comp,
+        larg,
+        alt,
         peso: weightInTonnes(generalCargo.peso.value, generalCargo.pesoUnit.value),
         qtd: Number(generalCargo.qtd.value),
         camadas: Number(generalCargo.camadas.value),
         colocarSobreAnterior: generalCargo.stack.checked,
+        rotacao: Number(generalCargo.rotacao.value),
         armador: 'generico'
     };
     if (editingCargaIndex !== null && composicaoCargas[editingCargaIndex].lashing) {
@@ -2511,6 +2631,8 @@ generalCargo.form.addEventListener('submit', event => {
     if (editingCargaIndex === null) composicaoCargas.push(carga);
     else composicaoCargas[editingCargaIndex] = carga;
     editingCargaIndex = null;
+    editingCargoRotationBefore = undefined;
+    editingCargoRotationPreviewed = false;
     atualizarBotaoCarga();
     renderListaCargas();
     analyzeAndDraw();
@@ -4846,9 +4968,13 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
 
     loadSequence.loads.forEach(({ carga, originalCarga, grid, startOffset, mesaStartOffset, eixoStartOffset, splitCoils, stackBaseHeight }) => {
         const lashing = displayedLashing(originalCarga);
-        const cW = Math.max(.1, carga.larg) * S;
+        const cargoRotation = getCargoRotation(originalCarga);
+        const rotatedSideways = cargoRotation % 180 === 90;
+        const cW = Math.max(.1, rotatedSideways ? carga.comp : carga.larg) * S;
         const cH = Math.max(.1, carga.alt) * S;
-        const cL = Math.max(.1, carga.comp) * S;
+        const cL = Math.max(.1, rotatedSideways ? carga.larg : carga.comp) * S;
+        const footprintW = Math.max(.1, carga.larg) * S;
+        const footprintL = Math.max(.1, carga.comp) * S;
         
         const loadDeckY = !isCarreta && pos === 'eixos' && tr.tipo !== 'reta'
             ? getPranchaAxleArea(tr).height*S : (tr.tipo === 'reta' ? pH : (isCarreta ? deckY : hT));
@@ -5434,8 +5560,8 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
                 cargoBeam([halfW,y,-halfL],[halfW,y,halfL],frameTube,skidSteel);
             });
 
-            const columns = Math.max(2,Math.min(5,Math.floor(carga.larg/0.55)));
-            const rows = Math.max(2,Math.min(4,Math.floor(carga.comp/0.75)));
+            const columns = Math.max(2,Math.min(5,Math.floor(cW/S/0.55)));
+            const rows = Math.max(2,Math.min(4,Math.floor(cL/S/0.75)));
             const bottleH = cH*0.65;
             const bottleRadius = Math.min(cW/(columns*3),cL/(rows*3),cH*0.095);
             for (let row=0;row<rows;row++){
@@ -5543,6 +5669,8 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
             cargoBox(cW*1.01,.07*S,cL*1.01,darkOrange,0,cH/2,0);
             cargoBox(cW*1.01,.07*S,cL*1.01,darkOrange,0,-cH/2,0);
         }
+
+        baseItem.rotation.y = THREE.MathUtils.degToRad(cargoRotation);
         
         if (splitCoils) {
             const coilLength = cL/2;
@@ -5557,19 +5685,19 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
                 const r=Math.floor(i/grid.maxCols);
                 const c=i%grid.maxCols;
                 const rowItems=Math.min(grid.maxCols,grid.pecasNaBase-r*grid.maxCols);
-                const rowW=rowItems*cW+Math.max(0,rowItems-1)*grid.gap*S;
-                const itemX=grid.centerX*S-rowW/2+cW/2+c*(cW+grid.gap*S);
+                const rowW=rowItems*footprintW+Math.max(0,rowItems-1)*grid.gap*S;
+                const itemX=grid.centerX*S-rowW/2+footprintW/2+c*(footprintW+grid.gap*S);
                 const rowOffset=r*(coilLength+grid.gap*S);
                 for (let layer = 0; layer < getStackCount(carga, i, grid.camadas); layer++) {
                     const eixoItem=baseItem.clone();
                     eixoItem.position.set(itemX,eixoY+layer*cH,eixoFrontZ-coilLength/2-rowOffset);
                     loadGroup.add(eixoItem);
-                    drawLoadLashing(carga, eixoItem.position.x, eixoItem.position.y, eixoItem.position.z, cW, cH, coilLength, eixoDeckY, lashing, true);
+                    drawLoadLashing(carga, eixoItem.position.x, eixoItem.position.y, eixoItem.position.z, footprintW, cH, coilLength, eixoDeckY, lashing, true);
 
                     const mesaItem=baseItem.clone();
                     mesaItem.position.set(itemX,mesaY+layer*cH,mesaFrontZ-coilLength/2-rowOffset);
                     loadGroup.add(mesaItem);
-                    drawLoadLashing(carga, mesaItem.position.x, mesaItem.position.y, mesaItem.position.z, cW, cH, coilLength, tr.tipo==='reta'?pH:hT, lashing, true);
+                    drawLoadLashing(carga, mesaItem.position.x, mesaItem.position.y, mesaItem.position.z, footprintW, cH, coilLength, tr.tipo==='reta'?pH:hT, lashing, true);
                 }
             }
         } else {
@@ -5578,15 +5706,15 @@ function draw3D(tr, pos, isCarreta, comparison = null, targetTrailerGroup = trai
                 const c = i % grid.maxCols;
                 
                 const rowItems = Math.min(grid.maxCols, grid.pecasNaBase - r * grid.maxCols);
-                const rowW = rowItems * cW + Math.max(0, rowItems - 1) * grid.gap * S;
+                const rowW = rowItems * footprintW + Math.max(0, rowItems - 1) * grid.gap * S;
                 
-                const itemX = grid.centerX * S - rowW / 2 + cW / 2 + c * (cW + grid.gap * S);
-                const itemZ = loadZ_start - cL / 2 - r * (cL + grid.gap * S);
+                const itemX = grid.centerX * S - rowW / 2 + footprintW / 2 + c * (footprintW + grid.gap * S);
+                const itemZ = loadZ_start - footprintL / 2 - r * (footprintL + grid.gap * S);
                 for (let layer = 0; layer < getStackCount(carga, i, grid.camadas); layer++) {
                     const inst = baseItem.clone();
                     inst.position.set(itemX, loadY + layer * cH, itemZ);
                     loadGroup.add(inst);
-                    drawLoadLashing(carga, inst.position.x, inst.position.y, inst.position.z, cW, cH, cL, loadY - cH/2 - stackBaseHeight*S, lashing, false);
+                    drawLoadLashing(carga, inst.position.x, inst.position.y, inst.position.z, footprintW, cH, footprintL, loadY - cH/2 - stackBaseHeight*S, lashing, false);
                     if (generalCargoByType.has(carga.type)) generalInstances.push(inst);
                 }
             }
@@ -6352,7 +6480,8 @@ tipoCargaSelect.addEventListener('change', () => {
     const loadType = LOAD_TYPES.find(type => type.value === val);
     if (loadType) {
         const preset = loadType.preset;
-        [inputs.cComp, inputs.cLarg, inputs.cAlt].forEach((el,i) => el.value = preset[i]);
+        [inputs.cComp, inputs.cLarg, inputs.cAlt].forEach((el,i) => el.value = formatDimensionInput(preset[i]));
+        inputs.cRotacao.value = '0';
         inputs.cPeso.value = weightForInput(preset[3], inputs.cPesoUnit.value);
     }
 });
@@ -6362,6 +6491,8 @@ els.btnReset.addEventListener('click', () => {
     inputs.cCamadas.value = '1';
     inputs.cSobreAnterior.checked = false;
     editingCargaIndex = null;
+    editingCargoRotationBefore = undefined;
+    editingCargoRotationPreviewed = false;
     atualizarBotaoCarga();
     renderListaCargas();
     inputs.placa_carreta.value = ""; inputs.placa_caminhao.value = ""; inputs.placa_prancha.value = "prancha_reb_6_3";
@@ -6544,6 +6675,7 @@ function capturePlanState() {
             comp: inputs.cComp.value,
             larg: inputs.cLarg.value,
             alt: inputs.cAlt.value,
+            rotacao: inputs.cRotacao.value,
             peso: inputs.cPeso.value,
             pesoUnit: inputs.cPesoUnit.value,
             qtd: inputs.cQtd.value,
@@ -6555,6 +6687,7 @@ function capturePlanState() {
             comp: generalCargo.comp.value,
             larg: generalCargo.larg.value,
             alt: generalCargo.alt.value,
+            rotacao: generalCargo.rotacao.value,
             peso: generalCargo.peso.value,
             pesoUnit: generalCargo.pesoUnit.value,
             qtd: generalCargo.qtd.value,
@@ -6584,6 +6717,9 @@ function validatePlanState(state) {
     if (state.generalCargo?.type && !generalCargoByType.has(state.generalCargo.type)) {
         throw new Error('Este planejamento contém um modelo de carga desconhecido.');
     }
+    if (!isValidCargoRotation(state.cargo.rotacao) || !isValidCargoRotation(state.generalCargo?.rotacao)) {
+        throw new Error('Este planejamento contém uma orientação de carga inválida.');
+    }
     if ([state.cargo.pesoUnit, state.generalCargo?.pesoUnit].some(unit => unit !== undefined && !['kg', 't'].includes(unit))) {
         throw new Error('Este planejamento contém uma unidade de peso inválida.');
     }
@@ -6603,6 +6739,7 @@ function validatePlanState(state) {
         Number.isFinite(item.larg) && item.larg > 0 &&
         Number.isFinite(item.alt) && item.alt > 0 &&
         Number.isFinite(item.peso) && item.peso >= 0 &&
+        isValidCargoRotation(item.rotacao) &&
         Number.isInteger(item.qtd) && item.qtd > 0 &&
         (item.camadas === undefined || (Number.isInteger(item.camadas) && item.camadas > 0)) &&
         (item.colocarSobreAnterior === undefined || typeof item.colocarSobreAnterior === 'boolean') &&
@@ -6635,9 +6772,10 @@ function restorePlanState(state) {
 
     tipoCargaSelect.value = state.cargo.type;
     inputArmador.value = state.cargo.armador || 'generico';
-    inputs.cComp.value = state.cargo.comp;
-    inputs.cLarg.value = state.cargo.larg;
-    inputs.cAlt.value = state.cargo.alt;
+    inputs.cComp.value = formatDimensionInput(state.cargo.comp);
+    inputs.cLarg.value = formatDimensionInput(state.cargo.larg);
+    inputs.cAlt.value = formatDimensionInput(state.cargo.alt);
+    inputs.cRotacao.value = String(getCargoRotation({ rotacao: state.cargo.rotacao }));
     const restoreWeight = (input, unit, value, savedUnit) => {
         unit.value = savedUnit || 'kg';
         unit.dataset.previousUnit = unit.value;
@@ -6650,9 +6788,10 @@ function restorePlanState(state) {
     inputs.cCamadas.value = state.cargo.camadas || '1';
     inputs.cSobreAnterior.checked = state.cargo.colocarSobreAnterior === true;
     generalCargo.model.value = state.generalCargo?.type || '';
-    generalCargo.comp.value = state.generalCargo?.comp || '';
-    generalCargo.larg.value = state.generalCargo?.larg || '';
-    generalCargo.alt.value = state.generalCargo?.alt || '';
+    generalCargo.comp.value = formatDimensionInput(state.generalCargo?.comp);
+    generalCargo.larg.value = formatDimensionInput(state.generalCargo?.larg);
+    generalCargo.alt.value = formatDimensionInput(state.generalCargo?.alt);
+    generalCargo.rotacao.value = String(getCargoRotation({ rotacao: state.generalCargo?.rotacao }));
     restoreWeight(generalCargo.peso, generalCargo.pesoUnit, state.generalCargo?.peso, state.generalCargo?.pesoUnit);
     generalCargo.qtd.value = state.generalCargo?.qtd || '1';
     generalCargo.camadas.value = state.generalCargo?.camadas || '1';
@@ -6681,6 +6820,8 @@ function restorePlanState(state) {
     document.getElementById('tube_strapping_off').setAttribute('aria-pressed', String(!tubeStrappingEnabled));
 
     editingCargaIndex = null;
+    editingCargoRotationBefore = undefined;
+    editingCargoRotationPreviewed = false;
     atualizarBotaoCarga();
     renderListaCargas();
     analyzeAndDraw();
