@@ -23,10 +23,10 @@ test('publicação web inclui modelos compactados e originais; shell Android nã
             'OBJ/semi.obj', 'cargas/01palette.glb', 'icons/icon.png', 'assets/iveco-logo.png'
         ].forEach(name => put(name));
         const vehicles = [
-            ['Truck (2).glb', 'truck.glb.gz'], ['Toco (2).glb', 'toco.glb.gz'],
-            ['F350-chevrolet.glb', 'vuc-chevrolet.glb.gz'], ['F350-honda_acty.glb', 'vuc-honda.glb.gz'],
-            ['F350-mercedes-benz.glb', 'vuc-mercedes.glb.gz'], ['volkswagen_saveiro.glb', 'volkswagen-saveiro.glb.gz'],
-            ['../motoristas/motorista.glb', 'motorista.glb.gz'], ['../motoristas/motorista-2.glb', 'motorista-2.glb.gz']
+            ['Truck (2).glb', 'truck.glb.bin'], ['Toco (2).glb', 'toco.glb.bin'],
+            ['F350-chevrolet.glb', 'vuc-chevrolet.glb.bin'], ['F350-honda_acty.glb', 'vuc-honda.glb.bin'],
+            ['F350-mercedes-benz.glb', 'vuc-mercedes.glb.bin'], ['volkswagen_saveiro.glb', 'volkswagen-saveiro.glb.bin'],
+            ['../motoristas/motorista.glb', 'motorista.glb.bin'], ['../motoristas/motorista-2.glb', 'motorista-2.glb.bin']
         ];
         vehicles.forEach(([source]) => put(path.join('caminhões', source)));
         const run = (...args) => execFileSync(process.execPath, [path.join(root, script), ...args], {
@@ -39,7 +39,7 @@ test('publicação web inclui modelos compactados e originais; shell Android nã
             assert.deepEqual(gunzipSync(fs.readFileSync(path.join(root, 'dist', 'modelos', compressed))), original);
         });
         assert.ok(fs.existsSync(path.join(root, 'dist', 'cargas', '01palette.glb')));
-        assert.ok(fs.existsSync(path.join(root, 'dist', 'modelos', 'cargas', '01palette.glb.gz')));
+        assert.ok(fs.existsSync(path.join(root, 'dist', 'modelos', 'cargas', '01palette.glb.bin')));
         run('--android-shell');
         ['caminhões', 'modelos', 'cargas', 'motoristas'].forEach(name => {
             assert.equal(fs.existsSync(path.join(root, 'dist', name)), false);

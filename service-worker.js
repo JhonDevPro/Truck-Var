@@ -1,4 +1,4 @@
-const CACHE_NAME = 'felka-cargas-v35';
+const CACHE_NAME = 'felka-cargas-v36';
 const APP_SHELL = [
     './',
     './index.html',
@@ -35,8 +35,8 @@ self.addEventListener('fetch', event => {
 
     const url = new URL(request.url);
     const sameOrigin = url.origin === self.location.origin;
-    const isLargeModel = /\.(glb|gltf|obj|mtl)(\.gz)?$/i.test(url.pathname);
-    const isCompressedModel = /\.glb\.gz$/i.test(url.pathname);
+    const isLargeModel = /\.(glb|gltf|obj|mtl)(\.bin)?$/i.test(url.pathname);
+    const isCompressedModel = /\.glb\.bin$/i.test(url.pathname);
     const isLargeTexture = /\.(png|jpe?g)$/i.test(url.pathname)
         && !url.pathname.includes('/icons/')
         && !url.pathname.endsWith('/assets/iveco-logo.png');

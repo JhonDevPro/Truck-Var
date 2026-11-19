@@ -20,16 +20,16 @@ const modelFiles = [
     'scania_S-730.glb',
     'chassi-para-carreta-14-15.glb'
 ];
-// Caminhões: o site publicado usa as versões .gz.
+// Os dados gzip usam .bin porque o GitHub Pages não serve as URLs terminadas em .gz.
 const vehicleModels = [
-    ['caminhões/Truck (2).glb', 'modelos/truck.glb.gz'],
-    ['caminhões/Toco (2).glb', 'modelos/toco.glb.gz'],
-    ['caminhões/F350-chevrolet.glb', 'modelos/vuc-chevrolet.glb.gz'],
-    ['caminhões/F350-honda_acty.glb', 'modelos/vuc-honda.glb.gz'],
-    ['caminhões/F350-mercedes-benz.glb', 'modelos/vuc-mercedes.glb.gz'],
-    ['caminhões/volkswagen_saveiro.glb', 'modelos/volkswagen-saveiro.glb.gz'],
-    ['motoristas/motorista.glb', 'modelos/motorista.glb.gz'],
-    ['motoristas/motorista-2.glb', 'modelos/motorista-2.glb.gz']
+    ['caminhões/Truck (2).glb', 'modelos/truck.glb.bin'],
+    ['caminhões/Toco (2).glb', 'modelos/toco.glb.bin'],
+    ['caminhões/F350-chevrolet.glb', 'modelos/vuc-chevrolet.glb.bin'],
+    ['caminhões/F350-honda_acty.glb', 'modelos/vuc-honda.glb.bin'],
+    ['caminhões/F350-mercedes-benz.glb', 'modelos/vuc-mercedes.glb.bin'],
+    ['caminhões/volkswagen_saveiro.glb', 'modelos/volkswagen-saveiro.glb.bin'],
+    ['motoristas/motorista.glb', 'modelos/motorista.glb.bin'],
+    ['motoristas/motorista-2.glb', 'modelos/motorista-2.glb.bin']
 ];
 const files = androidShell ? sharedFiles : [...sharedFiles, ...modelFiles];
 
@@ -40,7 +40,7 @@ for (const file of files) {
 }
 
 if (androidShell) {
-    for (const file of [...modelFiles, 'scania_S-730.glb.gz', 'chassi-para-carreta-14-15.glb.gz']) {
+    for (const file of [...modelFiles, 'scania_S-730.glb.bin', 'chassi-para-carreta-14-15.glb.bin']) {
         await rm(resolve(output, file), { force: true });
     }
     await rm(resolve(output, 'OBJ'), { recursive: true, force: true });
@@ -51,12 +51,12 @@ if (androidShell) {
 } else {
     const scaniaModel = await readFile(resolve(root, 'scania_S-730.glb'));
     await writeFile(
-        resolve(output, 'scania_S-730.glb.gz'),
+        resolve(output, 'scania_S-730.glb.bin'),
         gzipSync(scaniaModel, { level: 9 })
     );
     const trailerChassis = await readFile(resolve(root, 'chassi-para-carreta-14-15.glb'));
     await writeFile(
-        resolve(output, 'chassi-para-carreta-14-15.glb.gz'),
+        resolve(output, 'chassi-para-carreta-14-15.glb.bin'),
         gzipSync(trailerChassis, { level: 9 })
     );
     await cp(resolve(root, 'OBJ'), resolve(output, 'OBJ'), { recursive: true });
@@ -74,7 +74,7 @@ if (androidShell) {
     const cargoFiles = await readdir(resolve(root, 'cargas'), { withFileTypes: true });
     for (const file of cargoFiles.filter(entry => entry.isFile() && /\.glb$/i.test(entry.name))) {
         const model = await readFile(resolve(root, 'cargas', file.name));
-        await writeFile(resolve(cargoOutput, `${file.name}.gz`), gzipSync(model, { level: 9 }));
+        await writeFile(resolve(cargoOutput, `${file.name}.bin`), gzipSync(model, { level: 9 }));
     }
 }
 

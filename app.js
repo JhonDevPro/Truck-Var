@@ -75,7 +75,7 @@ const CAB_MODELS = {
     },
     scania_s_730: {
         format: 'gltf',
-        url: './scania_S-730.glb.gz',
+        url: './scania_S-730.glb.bin',
         compression: 'gzip',
         uniformScale: 3.0,
         rotationY: 0,
@@ -99,7 +99,7 @@ const VEHICLE_DETAIL_GRAY = 0x383c42;
 const RIGID_VEHICLE_MODELS = {
     truck: {
         url: './caminhões/Truck (2).glb',
-        compressedUrl: './modelos/truck.glb.gz',
+        compressedUrl: './modelos/truck.glb.bin',
         rotationY: Math.PI / 2,
         unit: 1,
         groundY: 0.01,
@@ -118,7 +118,7 @@ const RIGID_VEHICLE_MODELS = {
     },
     toco: {
         url: './caminhões/Toco (2).glb',
-        compressedUrl: './modelos/toco.glb.gz',
+        compressedUrl: './modelos/toco.glb.bin',
         rotationY: Math.PI / 2,
         unit: 1,
         groundY: 0.01,
@@ -137,7 +137,7 @@ const RIGID_VEHICLE_MODELS = {
     },
     vuc_chevrolet: {
         url: './caminhões/F350-chevrolet.glb',
-        compressedUrl: './modelos/vuc-chevrolet.glb.gz',
+        compressedUrl: './modelos/vuc-chevrolet.glb.bin',
         rotationY: 0,
         unit: 0.01,
         groundY: 0.0017,
@@ -151,7 +151,7 @@ const RIGID_VEHICLE_MODELS = {
     },
     vuc_honda: {
         url: './caminhões/F350-honda_acty.glb',
-        compressedUrl: './modelos/vuc-honda.glb.gz',
+        compressedUrl: './modelos/vuc-honda.glb.bin',
         rotationY: 0,
         unit: 1,
         preScale: 1.5,
@@ -167,7 +167,7 @@ const RIGID_VEHICLE_MODELS = {
     },
     vuc_mercedes: {
         url: './caminhões/F350-mercedes-benz.glb',
-        compressedUrl: './modelos/vuc-mercedes.glb.gz',
+        compressedUrl: './modelos/vuc-mercedes.glb.bin',
         rotationY: Math.PI,
         unit: 1,
         preScale: 1.0,
@@ -183,7 +183,7 @@ const RIGID_VEHICLE_MODELS = {
     },
     saveiro: {
         url: './caminhões/volkswagen_saveiro.glb',
-        compressedUrl: './modelos/volkswagen-saveiro.glb.gz',
+        compressedUrl: './modelos/volkswagen-saveiro.glb.bin',
         rotationY: 0,
         unit: 100,
         preScale: 1,
@@ -509,7 +509,7 @@ function loadGeneralCargo(type) {
         const model = generalCargoByType.get(type);
         const promise = new Promise((resolve, reject) => {
             loadCompressedGlb(
-                `./modelos/cargas/${encodeURIComponent(model.file)}.gz`,
+                `./modelos/cargas/${encodeURIComponent(model.file)}.bin`,
                 `./cargas/${encodeURIComponent(model.file)}`
             ).then(source => {
                 try {
@@ -1048,7 +1048,7 @@ function loadCompressedGlb(compressedUrl, uncompressedUrl) {
 function loadTrailerChassis() {
     if (!trailerChassisPromise) {
         const loadPromise = loadCompressedGlb(
-            './chassi-para-carreta-14-15.glb.gz',
+            './chassi-para-carreta-14-15.glb.bin',
             './chassi-para-carreta-14-15.glb'
         );
         const promise = loadPromise.catch(error => {
@@ -1080,8 +1080,8 @@ function loadIvecoLogoImage() {
 // veículo e é convertido em malhas estáticas, que podem ser clonadas junto com a cabine.
 const DRIVER_MODEL = { height: 1.72, poseTime: 1 };
 const DRIVER_MODELS = {
-    motorista_1: { url: './motoristas/motorista.glb', compressedUrl: './modelos/motorista.glb.gz' },
-    motorista_2: { url: './motoristas/motorista-2.glb', compressedUrl: './modelos/motorista-2.glb.gz' }
+    motorista_1: { url: './motoristas/motorista.glb', compressedUrl: './modelos/motorista.glb.bin' },
+    motorista_2: { url: './motoristas/motorista-2.glb', compressedUrl: './modelos/motorista-2.glb.bin' }
 };
 const driverRigPromises = new Map();
 const driverBakes = new Map();
